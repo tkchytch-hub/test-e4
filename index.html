@@ -255,11 +255,9 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
 .jad{margin-top:8px;font-size:calc(14px * var(--fs));color:var(--muted)}
 .jad summary{cursor:pointer;color:var(--ai);font-size:13px}
 .jad p{margin:5px 0 0}
-.sp-title{font-weight:700;text-align:center;margin:2px 0 4px;font-family:Georgia,"Times New Roman",serif;font-size:calc(17px * var(--fs))}
-.sp-text{font-family:Georgia,"Times New Roman",serif;font-size:calc(17px * var(--fs));line-height:1.75;margin:0}
 .qcard + .qcard{margin-top:10px}
-.qcard.pic{background:var(--ai-soft)}
-.pic-desc{margin:0;font-size:calc(15px * var(--fs))}
+.p3list{font-family:Georgia,"Times New Roman",serif;font-size:calc(15px * var(--fs));margin:0 0 4px;line-height:1.8}
+.slot.empty{font-size:10px}
 .actionbar .row .btn.sub{flex:1 1 50%}
 .actionbar .row .btn:not(.sub){flex:1 1 50%}
 
@@ -335,7 +333,6 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
       <button class="part" type="button" data-act="go-part" data-part="p3"><span class="tx"><b>大問3　語句の並べかえ</b><span class="ds">日本文に合うように語句を並べます</span><span class="st" id="ps-p3"></span></span><span class="go">練習する ›</span></button>
       <button class="part" type="button" data-act="go-part" data-part="p4"><span class="tx"><b>大問4　長文の内容一致</b><span class="ds">掲示・Eメール・説明文を読んで答えます</span><span class="st" id="ps-p4"></span></span><span class="go">練習する ›</span></button>
       <button class="part" type="button" data-act="go-part" data-part="li"><span class="tx"><b>リスニング（第1部〜第3部）</b><span class="ds">放送を聞いて答えます（文字で読んで解くこともできます）</span><span class="st" id="ps-li"></span></span><span class="go">練習する ›</span></button>
-      <button class="part" type="button" data-act="go-part" data-part="sp"><span class="tx"><b>スピーキングテスト</b><span class="ds">音読と、No.1〜No.4の質問に答える練習です</span><span class="st" id="ps-sp"></span></span><span class="go">練習する ›</span></button>
     </div>
     <p class="hint">問題はすべて書き下ろしです。</p>
   </div>
@@ -384,7 +381,7 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
   <div class="actionbar"><div class="inner"><button class="btn" id="startBtn">はじめる</button></div></div>
 </section>
 
-<!-- ========== 大問2〜4・リスニング・スピーキングの設定 ========== -->
+<!-- ========== 大問2〜4・リスニングの設定 ========== -->
 <section id="psetup" class="screen">
   <div class="pane">
   <div class="backrow"><button class="link" type="button" data-act="go-home">‹ トップにもどる</button></div>
@@ -395,7 +392,7 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
   <div class="actionbar"><div class="inner"><button class="btn" type="button" id="psStart" data-act="p-start">はじめる</button></div></div>
 </section>
 
-<!-- ========== 大問2〜4・リスニング・スピーキングの出題 ========== -->
+<!-- ========== 大問2〜4・リスニングの出題 ========== -->
 <section id="pquiz" class="screen">
   <div class="pane">
   <div class="qbar">
@@ -410,7 +407,7 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
   <div class="actionbar" id="pBar" style="display:none"><div class="inner" id="pBarIn"></div></div>
 </section>
 
-<!-- ========== 大問2〜4・リスニング・スピーキングの結果 ========== -->
+<!-- ========== 大問2〜4・リスニングの結果 ========== -->
 <section id="presult" class="screen">
   <div class="pane">
   <div class="masthead"><h1 id="prTitle">結果</h1><span class="date" id="prDate"></span></div>
@@ -1006,8 +1003,8 @@ const defaults = () => ({
   daily:{},   // "YYYY-MM-DD": [解答数, 正解数, 解答にかかった合計ミリ秒]
   weak:{},    // 語: まちがえた回数
   settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on",
-             pn:10, r4k:"all", r4n:1, lp:"all", lm:"listen", spn:1, sq:"text" },
-  parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング・スピーキング）
+             pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen" },
+  parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング）
   pweak:{}    // "パート:問題id": まちがえた回数
 });
 let S = defaults();
@@ -1022,7 +1019,7 @@ const WD = ["日","月","火","水","木","金","土"];
 const avgSec = (ms,n) => (n>0 && ms>0) ? (ms/n/1000).toFixed(1) : "－";
 
 /* ============================================================
-   大問2〜4・リスニング・スピーキングの問題データ
+   大問2〜4・リスニングの問題データ
    すべて書き下ろし（過去問の英文・選択肢は使っていません）。
    記録のため、id は変えずに、問題は末尾に追加してください。
 ============================================================ */
@@ -1051,28 +1048,29 @@ const P2 = [
 {id:"c20",L:[["Man","Excuse me. What time does the next train come?"],["Woman","___"]],k:"At 3:15.",d:["For an hour.","Every day.","By bus."],ja:["すみません。次の電車は何時に来ますか。","3時15分です。"],e:"What time ～?（何時に）には、At ～ で時刻を答えます。"}
 ];
 
-/* ---------- 大問3　語句の並べかえ（w は正しい順） ---------- */
+/* ---------- 大問3　語句の並べかえ ----------
+   本番と同じく語句は5つ。w は正しい順。文のはじめにくる語も小文字で書く（本番と同じ）。 */
 const P3 = [
-{id:"o01",ja:"私の姉はピアノをひくのが上手です。",pre:"My sister",w:["is","good","at","playing"],post:"the piano.",pt:"be good at ～ing で「～するのが上手だ」。at のあとは動詞の ing 形になります。"},
-{id:"o02",ja:"あなたは何時に起きますか。",pre:"",w:["What","time","do","you"],post:"get up?",pt:"What time（何時に）を文の最初に置き、そのあとは疑問文の語順（do you ～）にします。"},
-{id:"o03",ja:"この本はあの本よりおもしろい。",pre:"This book",w:["is","more","interesting","than"],post:"that one.",pt:"長い形容詞の比較は more ～ than …（…より～）。interesting の前に more を置きます。"},
-{id:"o04",ja:"私の家の近くに公園があります。",pre:"",w:["There","is","a","park"],post:"near my house.",pt:"There is ～（～がある）。場所を表す near my house は文の最後に置きます。"},
-{id:"o05",ja:"窓を開けてくれませんか。",pre:"",w:["Can","you","open","the"],post:"window?",pt:"Can you ～?（～してくれませんか）は、人に頼むときの言い方です。"},
-{id:"o06",ja:"私は将来、医者になりたいです。",pre:"I",w:["want","to","be","a"],post:"doctor in the future.",pt:"want to be ～ で「～になりたい」。to のあとは動詞の元の形（be）です。"},
-{id:"o07",ja:"彼は私に駅へ行く道を教えてくれました。",pre:"He",w:["told","me","the","way"],post:"to the station.",pt:"tell 人 物（人に物を教える）の語順です。the way to ～ で「～へ行く道」。"},
-{id:"o08",ja:"私には宿題をする時間がありません。",pre:"I have",w:["no","time","to","do"],post:"my homework.",pt:"no time to ～ で「～する時間がない」。to ～ が time を後ろから説明します。"},
-{id:"o09",ja:"私たちは夕食の前に手を洗わなければなりません。",pre:"We",w:["have","to","wash","our"],post:"hands before dinner.",pt:"have to ～ で「～しなければならない」。to のあとは動詞の元の形です。"},
-{id:"o10",ja:"あなたは京都にどのくらい滞在しましたか。",pre:"",w:["How","long","did","you"],post:"stay in Kyoto?",pt:"How long（どのくらいの間）を最初に置き、過去の疑問文 did you ～ を続けます。"},
-{id:"o11",ja:"この部屋で写真をとってはいけません。",pre:"",w:["Don't","take","pictures","in"],post:"this room.",pt:"Don't ～ で「～してはいけない」。take pictures（写真をとる）のあとに場所を続けます。"},
-{id:"o12",ja:"父は私に新しいかばんを買ってくれました。",pre:"My father",w:["bought","me","a","new"],post:"bag.",pt:"buy 人 物（人に物を買う）の語順です。a new bag のように、a は形容詞の前に置きます。"},
-{id:"o13",ja:"ケンはクラスでいちばん背が高い。",pre:"Ken is",w:["the","tallest","in","his"],post:"class.",pt:"「いちばん～」は the ～est。「クラスで」のような範囲は in ～ で表します。"},
-{id:"o14",ja:"私は英語の歌を聞くのが好きです。",pre:"I",w:["like","listening","to","English"],post:"songs.",pt:"like ～ing で「～するのが好きだ」。listen to ～（～を聞く）の to を忘れないようにします。"},
-{id:"o15",ja:"あなたは昨日の夜、何をしていましたか。",pre:"What",w:["were","you","doing","last"],post:"night?",pt:"過去進行形の疑問文は were you ～ing。last night（昨日の夜）は最後に置きます。"},
-{id:"o16",ja:"今度の日曜日に買い物に行きませんか。",pre:"",w:["Shall","we","go","shopping"],post:"next Sunday?",pt:"Shall we ～?（～しませんか）は、さそうときの言い方です。go shopping で「買い物に行く」。"},
-{id:"o17",ja:"母は台所で料理をしているところです。",pre:"My mother",w:["is","cooking","in","the"],post:"kitchen.",pt:"現在進行形は is ～ing。「台所で」は in the kitchen です。"},
-{id:"o18",ja:"そのかばんはいくらでしたか。",pre:"",w:["How","much","was","the"],post:"bag?",pt:"値段は How much でたずねます。過去のことなので was を使います。"},
-{id:"o19",ja:"私の兄は毎朝6時に起きます。",pre:"My brother",w:["gets","up","at","six"],post:"every morning.",pt:"get up（起きる）のあとに、at six（6時に）と時刻を続けます。"},
-{id:"o20",ja:"明日は雨になるでしょう。",pre:"It",w:["will","be","rainy","tomorrow"],post:".",pt:"will のあとは動詞の元の形（be）。tomorrow は文の最後に置きます。"}
+{id:"f01",ja:"私は毎朝7時に朝食を食べます。",pre:"I",w:["eat","breakfast","at","seven","every"],post:"morning.",pt:"「何を」→「何時に」→「いつも」の順。at seven（7時に）のあとに every morning（毎朝）を置きます。"},
+{id:"f02",ja:"あなたはどの季節がいちばん好きですか。",pre:"",w:["which","season","do","you","like"],post:"the best?",pt:"Which season（どの季節）を文のはじめに置き、そのあとは疑問文の語順（do you like）にします。"},
+{id:"f03",ja:"父は私に自転車の乗り方を教えてくれました。",pre:"My father",w:["taught","me","how","to","ride"],post:"a bike.",pt:"teach 人 ～ で「人に～を教える」。how to ～ は「～のしかた」です。"},
+{id:"f04",ja:"私たちは昨日、公園でテニスをしました。",pre:"We",w:["played","tennis","in","the","park"],post:"yesterday.",pt:"「した」→「何を」→「どこで」の順。in the park（公園で）のあとに yesterday を置きます。"},
+{id:"f05",ja:"あなたはどうやって学校に来ましたか。",pre:"",w:["how","did","you","come","to"],post:"school?",pt:"How（どうやって）を文のはじめに置き、過去の疑問文 did you ～ を続けます。did のあとの動詞は元の形（come）です。"},
+{id:"f06",ja:"ケンはサッカー部の部員です。",pre:"Ken",w:["is","a","member","of","the"],post:"soccer club.",pt:"a member of ～ で「～の一員」。the soccer club が of のあとに続きます。"},
+{id:"f07",ja:"図書館は何時に閉まりますか。",pre:"",w:["what","time","does","the","library"],post:"close?",pt:"What time（何時に）のあとは疑問文の語順。主語が the library（3人称単数）なので does を使います。"},
+{id:"f08",ja:"このかばんはあのかばんより大きい。",pre:"This",w:["bag","is","bigger","than","that"],post:"one.",pt:"比較は「～er than …」（…より～）。最後の one は bag のくり返しを避ける言い方です。"},
+{id:"f09",ja:"宿題を手伝ってくれてありがとう。",pre:"Thank",w:["you","for","helping","me","with"],post:"my homework.",pt:"Thank you for ～ing で「～してくれてありがとう」。help 人 with ～ は「人の～を手伝う」です。"},
+{id:"f10",ja:"明日の天気はどうなるでしょうか。",pre:"",w:["how","will","the","weather","be"],post:"tomorrow?",pt:"未来の疑問文は will を主語の前に出します。will のあとは動詞の元の形（be）です。"},
+{id:"f11",ja:"私はそのとき、お風呂に入っていました。",pre:"I",w:["was","taking","a","bath","at"],post:"that time.",pt:"過去進行形は was ～ing。take a bath で「お風呂に入る」。at that time は「そのとき」です。"},
+{id:"f12",ja:"あなたのお兄さんは何の楽器をひくことができますか。",pre:"",w:["what","instrument","can","your","brother"],post:"play?",pt:"What instrument（何の楽器）を文のはじめに置き、can を主語の前に出します。"},
+{id:"f13",ja:"私は昨日、宿題をするのを忘れました。",pre:"I",w:["forgot","to","do","my","homework"],post:"yesterday.",pt:"forget to ～ で「～するのを忘れる」。forgot は forget の過去形です。"},
+{id:"f14",ja:"駅へ行く道を教えてくれませんか。",pre:"Can you",w:["tell","me","the","way","to"],post:"the station?",pt:"tell 人 物（人に物を教える）の語順です。the way to ～ で「～へ行く道」。"},
+{id:"f15",ja:"私の部屋には机が2つあります。",pre:"",w:["there","are","two","desks","in"],post:"my room.",pt:"「～がある」は There is / There are。two desks（複数）なので are を使います。"},
+{id:"f16",ja:"エミは家族と京都を訪れるつもりです。",pre:"Emi",w:["is","going","to","visit","Kyoto"],post:"with her family.",pt:"be going to ～ で「～するつもりだ」。to のあとは動詞の元の形です。"},
+{id:"f17",ja:"夕食の前に手を洗ってください。",pre:"Please",w:["wash","your","hands","before","dinner"],post:".",pt:"Please のあとは動詞の元の形。before dinner（夕食の前に）は文の最後に置きます。"},
+{id:"f18",ja:"彼女はクラスでいちばん速く走ります。",pre:"She",w:["runs","the","fastest","in","her"],post:"class.",pt:"「いちばん～」は the ～est。「クラスで」のような範囲は in ～ で表します。"},
+{id:"f19",ja:"私は放課後、友だちと話すのが好きです。",pre:"I",w:["like","talking","with","my","friends"],post:"after school.",pt:"like ～ing で「～するのが好きだ」。talk with ～ は「～と話す」です。"},
+{id:"f20",ja:"土曜日に映画を見に行きませんか。",pre:"",w:["shall","we","go","to","the"],post:"movies on Saturday?",pt:"Shall we ～?（～しませんか）は、さそうときの言い方です。go to the movies で「映画を見に行く」。"}
 ];
 
 /* ---------- 大問4　長文の内容一致 ----------
@@ -1214,59 +1212,26 @@ const LI = [
 {id:"l3-12",part:3,L:[["N","Hello, class. Tomorrow we will go to the science museum. We will meet at the station at eight forty-five. Don't be late."]],q:"Where will the students meet tomorrow?",qja:"生徒たちは明日どこで集まりますか。",k:"At the station.",d:["At the museum.","At school.","At the park."],clue:"We will meet at the station",ja:["みなさん、こんにちは。明日は科学博物館に行きます。8時45分に駅に集合です。遅れないようにしましょう。"],e:"行き先は博物館ですが、集まる場所は駅です。"}
 ];
 
-/* ---------- スピーキングテスト ----------
-   本番：25語程度のパッセージの黙読・音読 → No.1・2（パッセージについて）
-   → No.3（イラストについて）→ No.4（受験者自身について） */
-const SPC = [
-{id:"s1",title:"Ken's Weekend",text:"Ken lives near the sea. He likes fishing very much. On Saturdays, he goes fishing with his father in the morning. Ken wants to catch a big fish someday.",ja:"ケンは海の近くに住んでいます。つりが大好きです。土曜日には、朝、父とつりに行きます。ケンはいつか大きな魚をつりたいと思っています。",
- qs:[{q:"Please look at the passage. Where does Ken live?",a:"He lives near the sea.",ja:"ケンはどこに住んでいますか。→ 彼は海の近くに住んでいます。",pt:"Ken は He に置きかえて答えます。lives の s を忘れないようにします。"},
-     {q:"What does Ken want to do someday?",a:"He wants to catch a big fish.",ja:"ケンはいつか何をしたいと思っていますか。→ 大きな魚をつりたいと思っています。",pt:"want to ～ の部分をそのまま使います。wants の s に注意します。"},
-     {pic:"女の子が、木の下で本を読んでいる。",q:"Now, please look at the picture. What is the girl doing?",a:"She is reading a book.",ja:"女の子は何をしていますか。→ 本を読んでいます。",pt:"What is ～ doing? には、is ～ing（現在進行形）で答えます。"},
-     {q:"What do you usually do on Sundays?",a:"I usually play soccer with my friends.",ja:"あなたはふだん日曜日に何をしますか。→（例）ふだんは友だちとサッカーをします。",pt:"自分のことなので、I で答えます。正解は1つではありません。主語と動詞のある文で言いましょう。"}]},
-{id:"s2",title:"Amy's Hobby",text:"Amy is a junior high school student. She likes drawing pictures. After school, she often draws pictures of her cat. Her pictures are very beautiful.",ja:"エイミーは中学生です。絵をかくのが好きです。放課後、よく自分のねこの絵をかきます。彼女の絵はとてもきれいです。",
- qs:[{q:"Please look at the passage. What does Amy like?",a:"She likes drawing pictures.",ja:"エイミーは何が好きですか。→ 絵をかくのが好きです。",pt:"Amy を She に置きかえます。"},
-     {q:"What does Amy often do after school?",a:"She often draws pictures of her cat.",ja:"エイミーは放課後よく何をしますか。→ よく自分のねこの絵をかきます。",pt:"本文の After school, のあとの部分を使って答えます。"},
-     {pic:"男の子が、自転車に乗っている。",q:"Now, please look at the picture. What is the boy doing?",a:"He is riding a bike.",ja:"男の子は何をしていますか。→ 自転車に乗っています。",pt:"ride（乗る）の ing 形は riding です（e をとって ing）。"},
-     {q:"What time do you usually get up?",a:"I usually get up at six thirty.",ja:"あなたはふだん何時に起きますか。→（例）ふだん6時30分に起きます。",pt:"時刻は at ～ で言います。"}]},
-{id:"s3",title:"A Bakery",text:"There is a small bakery near Lisa's house. Lisa often buys bread there. On Sundays, the bakery sells special apple pies. They are very popular.",ja:"リサの家の近くに小さなパン屋があります。リサはよくそこでパンを買います。日曜日には、そのパン屋は特別なアップルパイを売ります。それはとても人気があります。",
- qs:[{q:"Please look at the passage. Where is the small bakery?",a:"It's near Lisa's house.",ja:"小さなパン屋はどこにありますか。→ リサの家の近くにあります。",pt:"the small bakery は It に置きかえます。"},
-     {q:"What does the bakery sell on Sundays?",a:"It sells special apple pies.",ja:"パン屋は日曜日に何を売りますか。→ 特別なアップルパイを売ります。",pt:"It sells の s を忘れないようにします。"},
-     {pic:"2人の子どもが、公園でサッカーをしている。",q:"Now, please look at the picture. What are the children doing?",a:"They are playing soccer.",ja:"子どもたちは何をしていますか。→ サッカーをしています。",pt:"2人以上なので They are ～ing で答えます。"},
-     {q:"What do you like to eat for breakfast?",a:"I like to eat rice and miso soup.",ja:"あなたは朝食に何を食べるのが好きですか。→（例）ごはんとみそしるが好きです。",pt:"I like to eat ～. の形で、好きな食べ物を入れます。"}]},
-{id:"s4",title:"Taro's Dog",text:"Taro has a dog. Its name is Kuro. Every morning, Taro walks Kuro in the park before school. Kuro likes to run with other dogs there.",ja:"タロウは犬を飼っています。名前はクロです。毎朝、タロウは学校の前に公園でクロを散歩させます。クロはそこでほかの犬と走るのが好きです。",
- qs:[{q:"Please look at the passage. What is the name of Taro's dog?",a:"Its name is Kuro.",ja:"タロウの犬の名前は何ですか。→ 名前はクロです。",pt:"本文の Its name is Kuro. をそのまま使えます。"},
-     {q:"When does Taro walk Kuro?",a:"He walks Kuro every morning before school.",ja:"タロウはいつクロを散歩させますか。→ 毎朝、学校の前に散歩させます。",pt:"When（いつ）なので、every morning before school の部分が大事です。"},
-     {pic:"女の人が、台所で料理をしている。",q:"Now, please look at the picture. What is the woman doing?",a:"She is cooking.",ja:"女の人は何をしていますか。→ 料理をしています。",pt:"woman（女の人）は She で答えます。"},
-     {q:"Do you have any pets?",a:"Yes, I do. I have a cat.",ja:"あなたはペットを飼っていますか。→（例）はい。ねこを飼っています。（いいえの場合：No, I don't.）",pt:"Do you ～? には Yes, I do. / No, I don't. で答え、もう1文加えるとよいです。"}]},
-{id:"s5",title:"The School Festival",text:"Emi's school has a festival every October. Emi's class is going to sing three songs this year. Emi practices singing with her friends every day.",ja:"エミの学校では毎年10月に文化祭があります。エミのクラスは今年3曲歌う予定です。エミは毎日友だちと歌の練習をしています。",
- qs:[{q:"Please look at the passage. When does Emi's school have a festival?",a:"It has a festival every October.",ja:"エミの学校はいつ文化祭がありますか。→ 毎年10月にあります。",pt:"Emi's school は It に置きかえます。"},
-     {q:"How many songs is Emi's class going to sing?",a:"They are going to sing three songs.",ja:"エミのクラスは何曲歌う予定ですか。→ 3曲歌う予定です。",pt:"クラスの人たちのことなので They で答えます。be going to の形をそのまま使います。"},
-     {pic:"男の人が、雨の中でかさを持って歩いている。",q:"Now, please look at the picture. What is the man holding?",a:"He is holding an umbrella.",ja:"男の人は何を持っていますか。→ かさを持っています。",pt:"umbrella は母音で始まるので an umbrella です。"},
-     {q:"What are you going to do this weekend?",a:"I'm going to visit my grandparents.",ja:"あなたは今週末何をする予定ですか。→（例）祖父母の家に行く予定です。",pt:"未来の予定は I'm going to ～. で答えます。"}]}
-];
 
-/* ========== 大問2〜4・リスニング・スピーキングの進行 ========== */
+/* ========== 大問2〜4・リスニングの進行 ========== */
 const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $id = id => document.getElementById(id);
-const CIRC = ["①","②","③","④"];
+const CIRC = ["①","②","③","④","⑤"];
 const R4KIND = {A:"[A] 掲示", B:"[B] Eメール", C:"[C] 説明文"};
 const LPART = {1:"第1部", 2:"第2部", 3:"第3部"};
 const SPKJ = {M:"男性", W:"女性"};
 
 const PARTS = {
   p2:{title:"大問2　会話文の空所補充", sub:"会話の流れに合う文を、4つの中から選びます。"},
-  p3:{title:"大問3　語句の並べかえ", sub:"日本文に合うように、4つの語句を正しい順に並べます。本番では、2番目と4番目の組み合わせを選びます。"},
+  p3:{title:"大問3　語句の並べかえ", sub:"日本文に合うように、5つの語句を正しい順に並べます。本番では、2番目と4番目にくる語句の組み合わせを4つの中から選びます。"},
   p4:{title:"大問4　長文の内容一致", sub:"掲示・Eメール・説明文を読んで、質問に答えます。"},
-  li:{title:"リスニング（第1部〜第3部）", sub:"放送を聞いて答えます。読み上げに対応していない端末では、文字で読んで解きます。"},
-  sp:{title:"スピーキングテスト", sub:"音読と4つの質問の練習です。解答例を見て、言えたかどうかを自分で記録します。"}
+  li:{title:"リスニング（第1部〜第3部）", sub:"放送を聞いて答えます。読み上げに対応していない端末では、文字で読んで解きます。"}
 };
 const PNS  = [[5,"5問"],[10,"10問"],[20,"20問"],[0,"全部"]];
 const R4KS = [["all","すべて"],["A","[A] 掲示"],["B","[B] Eメール"],["C","[C] 説明文"]];
 const R4NS = [[1,"1題"],[2,"2題"],[0,"全部"]];
 const LPS  = [["all","第1部〜第3部"],["1","第1部"],["2","第2部"],["3","第3部"]];
 const LMS  = [["listen","聞いて解く"],["read","読んで解く"]];
-const SPNS = [[1,"1枚"],[2,"2枚"],[0,"全部"]];
-const SQS  = [["text","文字で見る"],["voice","音声だけで聞く"]];
 
 /* 項目数 */
 function partTotal(p){
@@ -1274,7 +1239,6 @@ function partTotal(p){
   if(p==="p3") return P3.length;
   if(p==="p4") return R4.reduce((n,s)=>n+s.qs.length,0);
   if(p==="li") return LI.length;
-  if(p==="sp") return SPC.length*4;
   return WORDS.length + GRAMMAR.length;
 }
 const pwk = (p,id) => (S.pweak && S.pweak[p+":"+id]) || 0;
@@ -1286,14 +1250,14 @@ const listenMode = () => (S.settings.lm==="listen" && canSpeak()) ? "listen" : "
 
 /* ---------- トップのパート一覧 ---------- */
 function renderParts(){
-  ["p1","p2","p3","p4","li","sp"].forEach(p=>{
+  ["p1","p2","p3","p4","li"].forEach(p=>{
     const el = $id("ps-"+p); if(!el) return;
     let n=0,c=0;
     if(p==="p1"){ /* 大問1は日ごとの記録から（ほかのパートの分を引く） */
       el.textContent = "全"+partTotal(p)+"語・問"; return;
     }
     const r = (S.parts && S.parts[p]) || [0,0]; n=r[0]; c=r[1];
-    el.textContent = "全"+partTotal(p)+(p==="sp"?"問（5枚）":"問") + (n>0 ? "　これまで "+n+"問・"+(p==="sp"?"言えた ":"正答率 ")+Math.round(c/n*100)+"％" : "");
+    el.textContent = "全"+partTotal(p)+"問" + (n>0 ? "　これまで "+n+"問・正答率 "+Math.round(c/n*100)+"％" : "");
   });
 }
 
@@ -1329,6 +1293,7 @@ function pSetup(part){
   };
   if(part==="p2" || part==="p3"){
     field("問題数", PNS, "pn", "まちがえたことのある問題を先に出します。");
+    if(part==="p3") field("解き方", P3MS, "p3m", "「並べて答える」は語句をタップして文を作ります。「本番形式」は、問題冊子と同じく2番目と4番目の組み合わせを4つの中から選びます。");
   }else if(part==="p4"){
     field("種類", R4KS, "r4k", "本番では [A] 掲示が2問、[B] Eメールが3問、[C] 説明文が5問です。");
     field("長文の数", R4NS, "r4n");
@@ -1338,11 +1303,6 @@ function pSetup(part){
     field("解き方", LMS, "lm", canSpeak()
       ? "「聞いて解く」では、本番と同じく英文を見ずに聞いて答えます。第1部は選択肢も放送で聞きます。本番では2回放送されるので、2回まで聞くのがおすすめです。"
       : "この端末（またはブラウザ）は読み上げに対応していないため、文字で読んで解きます。");
-  }else if(part==="sp"){
-    field("問題カードの数", SPNS, "spn", "1枚につき、音読と質問4つ（No.1〜No.4）です。");
-    field("質問の出し方", SQS, "sq", canSpeak()
-      ? "本番では質問は音声だけで聞きます。「音声だけで聞く」にすると、その練習ができます。"
-      : "この端末（またはブラウザ）は読み上げに対応していないため、質問は文字で表示します。");
   }
   field("文字の大きさ", SIZES, "size");
   pUpdateStart();
@@ -1368,23 +1328,13 @@ function pBuild(){
     const picked = cut(weakFirst(pool,"li",x=>x.id), st.pn);
     return picked.sort((a,b)=> a.part-b.part);
   }
-  if(p==="sp"){
-    const cards = cut(shuffle(SPC), st.spn);
-    const list = [];
-    cards.forEach(c=>{ for(let n=0;n<=4;n++) list.push({card:c, n}); });
-    return list;
-  }
   return [];
 }
-function pCountOf(list){
-  if(PX.part==="sp") return list.filter(x=>x.n>0).length;
-  return list.length;
-}
+function pCountOf(list){ return list.length; }
 function pUpdateStart(){
   const b = $id("psStart"); if(!b || !PX) return;
   const list = pBuild();
-  if(PX.part==="sp") b.textContent = "はじめる（カード"+(list.length/5)+"枚・質問"+pCountOf(list)+"問）";
-  else if(PX.part==="p4"){
+  if(PX.part==="p4"){
     const nsets = new Set(list.map(x=>x.set.id)).size;
     b.textContent = "はじめる（長文"+nsets+"題・"+list.length+"問）";
   }
@@ -1408,7 +1358,7 @@ function pDock(html){
 }
 function pHeader(label){
   $id("pCount").textContent = label;
-  $id("pScore").textContent = (PX.part==="sp" ? "言えた " : "正解 ")+PX.ok;
+  $id("pScore").textContent = "正解 "+PX.ok;
 }
 function markSvg(ok){
   return '<div class="mark '+(ok?"ok":"ng")+'">'+(ok
@@ -1456,7 +1406,6 @@ function pRender(){
   else if(p==="p3") renderP3(it);
   else if(p==="p4") renderP4(it);
   else if(p==="li") renderLI(it);
-  else if(p==="sp") renderSP(it);
   const pane = document.querySelector("#pquiz .pane");
   if(p==="p4" && PX.i>0 && PX.list[PX.i-1].set===it.set){
     const qc = $id("pQ"); if(qc && qc.scrollIntoView) try{ qc.scrollIntoView({block:"start"}); }catch(e){}
@@ -1484,44 +1433,75 @@ function answerP2(i){
 }
 
 /* --- 大問3 --- */
+const P3MS = [["tap","並べて答える"],["exam","本番形式（4択）"]];
+const p3Full = it => {
+  const body = (it.pre ? it.pre+" " : "") + it.w.join(" ") + (/^[.?!,]/.test(it.post) ? "" : " ") + it.post;
+  return body.charAt(0).toUpperCase() + body.slice(1);
+};
 function renderP3(it){
   pHeader("大問3　"+(PX.i+1)+" / "+PX.list.length);
   let ord;
-  do{ ord = shuffle([0,1,2,3]); }while(ord.join()==="0,1,2,3");
-  PX.ord = ord;          // ①〜④ に入る語（正しい順での番号）
-  PX.placed = [];        // 置いた ①〜④ の番号
+  do{ ord = shuffle([0,1,2,3,4]); }while(ord.join()==="0,1,2,3,4");
+  PX.ord = ord;          // ①〜⑤ に入る語句（正しい順での番号）
+  PX.placed = [];        // 置いた ①〜⑤ の番号
+  PX.p3m = S.settings.p3m==="exam" ? "exam" : "tap";
   $id("pPass").innerHTML = "";
+  if(PX.p3m==="exam"){
+    const n = wi => ord.indexOf(wi);            // 正しい順で wi 番目の語句が ①〜⑤ のどれか
+    const key = n(1)+"-"+n(3);
+    const pairs = [key];
+    while(pairs.length<4){
+      const a = Math.floor(Math.random()*5), b = Math.floor(Math.random()*5);
+      const k = a+"-"+b;
+      if(a!==b && pairs.indexOf(k)<0) pairs.push(k);
+    }
+    PX.ch = shuffle(pairs); PX.key = key;
+    const list = ord.map((wi,ci)=> CIRC[ci]+' '+esc(it.w[wi])).join('　');
+    const boxes = [0,1,2,3,4].map(s=>'<span class="slot empty">'+(s===1?'2番目':s===3?'4番目':'')+'</span>').join("");
+    $id("pQ").innerHTML = '<div class="qcard" id="pCard"><p class="qtype">日本文に合うように並べかえ、2番目と4番目の組み合わせを選びましょう</p>'+
+      '<p class="qjat">'+esc(it.ja)+'</p><p class="p3list">（ '+list+' ）</p>'+
+      '<p class="qsent ordsent">'+esc(it.pre)+(it.pre?' ':'')+'<span class="slots">'+boxes+'</span>'+(/^[.?!,]/.test(it.post)?'':' ')+esc(it.post)+'</p></div>'+
+      choicesHTML(PX.ch.map(k=>{ const [a,b]=k.split("-"); return CIRC[a]+" ― "+CIRC[b]; }));
+    pDock(null);
+    return;
+  }
   drawP3(it);
   pDock('<button class="btn" type="button" data-act="p3-check" id="p3Check" disabled>答え合わせ</button>');
 }
 function drawP3(it, result){
-  const slots = [0,1,2,3].map(s=>{
+  const slots = [0,1,2,3,4].map(s=>{
     const pi = PX.placed[s];
-    if(pi===undefined) return '<span class="slot empty">'+(s+1)+'</span>';
+    if(pi===undefined) return '<span class="slot empty">'+(s===1?'2番目':s===3?'4番目':'')+'</span>';
     return '<button type="button" class="slot" data-act="p3-slot" data-s="'+s+'"'+(result?' disabled':'')+'>'+esc(it.w[PX.ord[pi]])+'</button>';
   }).join("");
   const chips = PX.ord.map((wi,ci)=> '<button type="button" class="chip" data-act="p3-chip" data-c="'+ci+'"'+((PX.placed.indexOf(ci)>=0||result)?' disabled':'')+'><span class="cn">'+CIRC[ci]+'</span>'+esc(it.w[wi])+'</button>').join("");
   $id("pQ").innerHTML = '<div class="qcard" id="pCard"><p class="qtype">日本文に合うように並べかえましょう</p>'+
     '<p class="qjat">'+esc(it.ja)+'</p>'+
-    '<p class="qsent ordsent">'+esc(it.pre)+(it.pre?' ':'')+'<span class="slots">'+slots+'</span>'+(it.post==="."?'':' ')+esc(it.post)+'</p></div>'+
+    '<p class="qsent ordsent">'+esc(it.pre)+(it.pre?' ':'')+'<span class="slots">'+slots+'</span>'+(/^[.?!,]/.test(it.post)?'':' ')+esc(it.post)+'</p></div>'+
     '<div class="chips">'+chips+'</div>'+
-    (result?'':'<p class="hint" style="text-align:center">語句を順にタップします。置いた語句をタップすると、もどせます。</p>');
-  const c = $id("p3Check"); if(c) c.disabled = PX.placed.length<4;
+    (result?'':'<p class="hint" style="text-align:center">語句を順にタップします。置いた語句をタップすると、もどせます。<br>本番と同じく、文のはじめにくる語も小文字になっています。</p>');
+  const c = $id("p3Check"); if(c) c.disabled = PX.placed.length<5;
 }
-function answerP3(){
+function answerP3(pick){
   const it = PX.list[PX.i];
-  const got = PX.placed.map(ci=>PX.ord[ci]);
-  const ok = got.join()==="0,1,2,3";
-  pFinishQ(ok, it.id, true);
-  drawP3(it, true);
+  let ok;
+  if(PX.p3m==="exam"){
+    ok = PX.ch[pick]===PX.key;
+    pFinishQ(ok, it.id, true);
+    const labels = PX.ch.map(k=>{ const [a,b]=k.split("-"); return CIRC[a]+" ― "+CIRC[b]; });
+    lockChoices(labels, labels[PX.ch.indexOf(PX.key)], pick);
+  }else{
+    ok = PX.placed.map(ci=>PX.ord[ci]).join()==="0,1,2,3,4";
+    pFinishQ(ok, it.id, true);
+    drawP3(it, true);
+  }
   $id("pCard").insertAdjacentHTML("beforeend", markSvg(ok));
   const num = wi => CIRC[PX.ord.indexOf(wi)];
-  const full = (it.pre?it.pre+" ":"")+it.w.join(" ")+(it.post==="."?"":" ")+it.post;
   $id("pAns").innerHTML = '<div class="answer">'+headHTML(ok)+
-    '<div class="en">'+esc(full)+'</div>'+
+    '<div class="en">'+esc(p3Full(it))+'</div>'+
     '<div class="ja">'+esc(it.ja)+'</div>'+
     '<p class="cap">正しい順番</p><div>'+it.w.map((w,n)=>num(n)+' '+esc(w)).join("　→　")+'</div>'+
-    '<div class="ja">本番では、2番目（'+num(1)+' '+esc(it.w[1])+'）と4番目（'+num(3)+' '+esc(it.w[3])+'）の組み合わせを選びます。</div>'+
+    '<div class="ja">2番目は '+num(1)+' '+esc(it.w[1])+'、4番目は '+num(3)+' '+esc(it.w[3])+' なので、答えは「'+num(1)+' ― '+num(3)+'」です。</div>'+
     '<p class="cap">ポイント</p><div>'+esc(it.pt)+'</div></div>';
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
@@ -1637,52 +1617,6 @@ function answerLI(i){
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
 
-/* --- スピーキング --- */
-function spQuestionVisible(){ return !(S.settings.sq==="voice" && canSpeak()); }
-function renderSP(it){
-  const c = it.card;
-  pHeader(c.title+"　"+(it.n===0 ? "音読" : "No."+it.n));
-  $id("pPass").innerHTML = "";
-  if(it.n===0){
-    $id("pQ").innerHTML = '<div class="qcard"><p class="qtype">問題カード　まず20秒ほど黙読し、そのあと声に出して読みましょう</p>'+
-      '<p class="sp-title">'+esc(c.title)+'</p><p class="sp-text">'+esc(c.text)+'</p>'+
-      (canSpeak()?'<p class="playrow"><button type="button" class="say" data-act="sp-read">🔊 お手本の音読を聞く</button></p>':'')+
-      '<details class="jad"><summary>和訳を見る</summary><p>'+esc(c.ja)+'</p></details></div>';
-    pDock('<button class="btn" type="button" data-act="p-next">音読できた　→　質問へ</button>');
-    return;
-  }
-  const q = c.qs[it.n-1];
-  let h = '';
-  if(it.n<=2) h += '<div class="qcard"><p class="qtype">問題カード</p><p class="sp-title">'+esc(c.title)+'</p><p class="sp-text">'+esc(c.text)+'</p></div>';
-  if(q.pic) h += '<div class="qcard pic"><p class="qtype">イラスト（本番では絵を見て答えます）</p><p class="pic-desc">絵：'+esc(q.pic)+'</p></div>';
-  h += '<div class="qcard" id="pCard"><p class="qtype">No.'+it.n+(it.n===4?'　あなた自身のことについて答えます':'')+'</p>'+
-       (spQuestionVisible() ? '<p class="qsent">'+esc(q.q)+'</p>' : '<p class="hint">質問は音声だけで流れます。聞き取れなかったら、もう一度聞けます。</p>')+
-       (canSpeak()?'<p class="playrow"><button type="button" class="say" data-act="sp-q">🔊 質問を聞く</button></p>':'')+
-       '<p class="hint">答えを声に出して言ってから、解答例を見ましょう。</p></div>';
-  $id("pQ").innerHTML = h;
-  if(!spQuestionVisible()){ warmUpSpeech(); speakSeq([{t:q.q, p:1}]); }
-  pDock('<button class="btn" type="button" data-act="sp-model">解答例を見る</button>');
-}
-function spModel(){
-  const it = PX.list[PX.i], q = it.card.qs[it.n-1];
-  PX.stage = "model";
-  PX.ms = Math.min(Date.now()-PX.qStart, 120000);
-  const card = $id("pCard");
-  if(!spQuestionVisible()) card.insertAdjacentHTML("beforeend", '<p class="qsent" style="margin-top:8px">'+esc(q.q)+'</p>');
-  $id("pAns").innerHTML = '<div class="answer"><span class="head ok">解答例</span>'+
-    '<div class="en">'+esc(q.a)+'</div>'+
-    (canSpeak()?'<div><button type="button" class="say small" data-act="sp-a">🔊 解答例を聞く</button></div>':'')+
-    '<div class="ja">'+esc(q.ja)+'</div>'+
-    '<p class="cap">ポイント</p><div>'+esc(q.pt)+'</div></div>';
-  pDock('<div class="row"><button class="btn sub" type="button" data-act="sp-self" data-ok="0">言えなかった</button><button class="btn" type="button" data-act="sp-self" data-ok="1">言えた</button></div>');
-  try{ $id("pAns").scrollIntoView({block:"nearest"}); }catch(e){}
-}
-function spSelf(ok){
-  const it = PX.list[PX.i];
-  pFinishQ(ok, it.card.id+"-"+it.n, false, PX.ms);
-  pNext();
-}
-
 /* --- 共通 --- */
 function headHTML(ok){ return ok ? '<span class="head ok">正解</span>' : '<span class="head ng">不正解</span>'; }
 function pFinishQ(ok, id, daily, ms){
@@ -1708,11 +1642,10 @@ function pResult(){
   const total = PX.done, ok = PX.ok;
   const rate = total ? Math.round(ok/total*100) : 0;
   const secs = Math.round((Date.now()-PX.t0)/1000);
-  $id("prTitle").textContent = ({p2:"大問2",p3:"大問3",p4:"大問4",li:"リスニング",sp:"スピーキング"})[PX.part]+"の結果";
-  $id("prRetry").textContent = PX.part==="sp" ? "言えなかった質問をもう一度" : "まちがえた問題をもう一度";
+  $id("prTitle").textContent = ({p2:"大問2",p3:"大問3",p4:"大問4",li:"リスニング"})[PX.part]+"の結果";
   $id("prDate").textContent = new Date().toLocaleDateString("ja-JP");
   $id("prRate").textContent = rate;
-  $id("prDetail").innerHTML = total+"問中 "+ok+(PX.part==="sp"?"問言えた":"問正解")+"<br>所要 "+Math.floor(secs/60)+"分"+(secs%60)+"秒";
+  $id("prDetail").innerHTML = total+"問中 "+ok+"問正解"+"<br>所要 "+Math.floor(secs/60)+"分"+(secs%60)+"秒";
   $id("prMeter").style.width = rate+"%";
   $id("prMsg").textContent =
     rate>=90 ? "よくできました。この調子で続けましょう。" :
@@ -1721,7 +1654,6 @@ function pResult(){
                "まずは解説をよく読んで、まちがえた問題をもう一度解きましょう。";
   const ul = $id("prList"); ul.innerHTML = "";
   const card = $id("prReview");
-  $id("prReviewH").textContent = PX.part==="sp" ? "言えなかった質問" : "まちがえた問題";
   if(PX.wrong.length===0){ card.style.display = "none"; }
   else{
     card.style.display = "block";
@@ -1738,10 +1670,9 @@ function pResult(){
 function reviewHTML(w){
   const p = PX.part;
   if(p==="p2") return '<div class="ex">'+dlgHTML(w.L,{blank:true, fill:w.k})+'</div><div class="ja">'+esc(w.e)+'</div>';
-  if(p==="p3") return '<div class="en">'+esc((w.pre?w.pre+" ":"")+w.w.join(" ")+(w.post==="."?"":" ")+w.post)+'</div><div class="ja">'+esc(w.ja)+'</div>';
+  if(p==="p3") return '<div class="en">'+esc(p3Full(w))+'</div><div class="ja">'+esc(w.ja)+'</div>';
   if(p==="p4") return '<div class="ja">'+R4KIND[w.set.kind]+'</div><div class="en">'+esc(w.q.q)+'</div><div>答え：'+esc(w.q.k)+'</div><div class="ja">'+esc(w.q.e)+'</div>';
   if(p==="li") return '<div class="ja">'+LPART[w.part]+'</div>'+dlgHTML(w.L,{jaSpk:true})+(w.q?'<div class="en">Q. '+esc(w.q)+'</div>':'')+'<div>答え：'+esc(w.k)+'</div>';
-  if(p==="sp"){ const q = w.card.qs[w.n-1]; return '<div class="ja">'+esc(w.card.title)+'　No.'+w.n+'</div><div class="en">'+esc(q.q)+'</div><div>解答例：'+esc(q.a)+'</div>'; }
   return "";
 }
 
@@ -1759,13 +1690,13 @@ document.addEventListener("click", e=>{
   if(a==="p-pick"){
     if(PX.stage!=="ask") return;
     const i = Number(t.dataset.i);
-    if(PX.part==="p2") answerP2(i); else if(PX.part==="p4") answerP4(i); else if(PX.part==="li") answerLI(i);
+    if(PX.part==="p2") answerP2(i); else if(PX.part==="p3") answerP3(i); else if(PX.part==="p4") answerP4(i); else if(PX.part==="li") answerLI(i);
     return;
   }
   if(a==="p3-chip"){
     if(PX.stage!=="ask") return;
     const c = Number(t.dataset.c);
-    if(PX.placed.indexOf(c)<0 && PX.placed.length<4){ PX.placed.push(c); drawP3(PX.list[PX.i]); }
+    if(PX.placed.indexOf(c)<0 && PX.placed.length<5){ PX.placed.push(c); drawP3(PX.list[PX.i]); }
     return;
   }
   if(a==="p3-slot"){
@@ -1773,14 +1704,9 @@ document.addEventListener("click", e=>{
     PX.placed.splice(Number(t.dataset.s), 1); drawP3(PX.list[PX.i]);
     return;
   }
-  if(a==="p3-check"){ if(PX.stage==="ask" && PX.placed.length===4) answerP3(); return; }
+  if(a==="p3-check"){ if(PX.stage==="ask" && PX.placed.length===5) answerP3(); return; }
   if(a==="li-play"){ playLI(); return; }
   if(a==="li-replay"){ warmUpSpeech(); speakSeq(liSeq(PX.list[PX.i], false)); return; }
-  if(a==="sp-read"){ warmUpSpeech(); speakSeq([{t:PX.list[PX.i].card.text, p:1}]); return; }
-  if(a==="sp-q"){ const it = PX.list[PX.i]; warmUpSpeech(); speakSeq([{t:it.card.qs[it.n-1].q, p:1}]); return; }
-  if(a==="sp-a"){ const it = PX.list[PX.i]; warmUpSpeech(); speakSeq([{t:it.card.qs[it.n-1].a, p:1}]); return; }
-  if(a==="sp-model"){ if(PX.stage==="ask") spModel(); return; }
-  if(a==="sp-self"){ if(PX.stage==="model") spSelf(t.dataset.ok==="1"); return; }
   if(a==="pr-retry"){
     let list = shuffle(PX.wrong.slice());
     if(PX.part==="p4") list.sort((x,y)=> x.set.id<y.set.id?-1 : x.set.id>y.set.id?1 : x.qi-y.qi);
@@ -1794,6 +1720,11 @@ document.addEventListener("click", e=>{
   const saved = await loadData();
   if(saved) S = Object.assign(defaults(), saved, {settings:Object.assign(defaults().settings, saved.settings||{})});
 
+  /* スピーキングは外し、大問3は5語の問題に作り直したので、古い記録を片づける */
+  let tidy = false;
+  if(S.parts && S.parts.sp){ delete S.parts.sp; tidy = true; }
+  if(S.pweak){ Object.keys(S.pweak).forEach(k=>{ if(/^sp:|^p3:o/.test(k)){ delete S.pweak[k]; tidy = true; } }); }
+  if(tidy) await saveData(S);
   const t = today();
   if(S.lastLogin !== t){
     S.streak = (S.lastLogin === shiftDay(-1)) ? S.streak + 1 : 1;
