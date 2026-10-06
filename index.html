@@ -226,6 +226,11 @@ body{
 /* ---- 会話・長文・並べかえ ---- */
 .dlg{margin:2px 0 0}
 .dl{margin:0 0 5px;font-size:calc(16px * var(--fs));line-height:1.65;display:flex;gap:8px;align-items:baseline}
+.dl.en{display:block}
+/* ○×は英文にかぶらないよう、カードの右上に小さく出す */
+#pCard .mark{inset:auto;top:6px;right:8px;width:52px;height:52px}
+#pCard .mark svg{width:52px;height:52px}
+#pCard .qtype{padding-right:56px}   /* 第3部など話し手のいない英文は、ふつうの文章として並べる */
 .dl .spk{flex:0 0 auto;font-size:calc(13px * var(--fs));color:var(--ai);font-weight:700;min-width:3.6em}
 .dl .spk.w{color:var(--shu)}
 .dl .en,.dl.en{font-family:Georgia,"Times New Roman",serif}
