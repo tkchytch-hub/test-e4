@@ -1269,7 +1269,33 @@ const pwk = (p,id) => (S.pweak && S.pweak[p+":"+id]) || 0;
 function weakFirst(arr, p, idf){
   return shuffle(arr).map((x,i)=>({x,i,w:pwk(p,idf(x))})).sort((a,b)=> (b.w>0)-(a.w>0) || a.i-b.i).map(o=>o.x);
 }
-const listenMode = () => (S.settings.lm==="listen" && canSpeak()) ? "listen" : "read";
+/* ---------- 録音した音声（audio フォルダの mp3） ----------
+   Mac の Tom（男性）・Zoe（女性）の声で、1分間に100語の速さで作った音声。
+   ord：第1部の選択肢の順番（音声で読む順）　sec：音声の長さ（秒）　w：本文の語数 */
+const LAUDIO = {"l1-01": {"ord": ["Chicken and rice.", "At seven o'clock.", "In the kitchen."], "sec": 18.2, "wpm": 103}, "l1-02": {"ord": ["At the shop near the station.", "Last Sunday.", "It was five dollars."], "sec": 24.1, "wpm": 96}, "l1-03": {"ord": ["Oh, thanks.", "Yes, I am.", "See you tomorrow."], "sec": 24.0, "wpm": 91}, "l1-04": {"ord": ["It's blue.", "Thank you very much.", "That's my pen."], "sec": 21.9, "wpm": 89}, "l1-05": {"ord": ["It was fun.", "Let's meet at six.", "I went there yesterday."], "sec": 22.9, "wpm": 100}, "l1-06b": {"ord": ["OK. Have fun.", "It's next to the park.", "No, it's Kevin's."], "sec": 23.5, "wpm": 114}, "l1-07b": {"ord": ["Around five.", "At the library.", "He's my brother."], "sec": 22.2, "wpm": 104}, "l1-08": {"ord": ["No, for Christmas.", "Yes, she's seventy.", "It's very cold."], "sec": 21.6, "wpm": 109}, "l1-09b": {"ord": ["Saturday is better.", "I went there last year.", "It's very hot."], "sec": 20.4, "wpm": 125}, "l1-10": {"ord": ["No, it's only five minutes away.", "Yes, I like books.", "It's on Monday."], "sec": 24.1, "wpm": 112}, "l1-11": {"ord": ["In the music room.", "For two years.", "My brother did."], "sec": 20.5, "wpm": 103}, "l1-12b": {"ord": ["Thanks a lot.", "I'm sorry to hear that.", "It's sunny today."], "sec": 21.9, "wpm": 88}, "l2-01b": {"ord": null, "sec": 17.9, "wpm": 116}, "l2-02": {"ord": null, "sec": 22.9, "wpm": 94}, "l2-03b": {"ord": null, "sec": 21.6, "wpm": 90}, "l2-04": {"ord": null, "sec": 19.9, "wpm": 90}, "l2-05b": {"ord": null, "sec": 19.7, "wpm": 104}, "l2-06b": {"ord": null, "sec": 19.3, "wpm": 119}, "l2-07b": {"ord": null, "sec": 16.4, "wpm": 87}, "l2-08b": {"ord": null, "sec": 17.4, "wpm": 115}, "l2-09b": {"ord": null, "sec": 20.0, "wpm": 120}, "l2-10": {"ord": null, "sec": 19.8, "wpm": 112}, "l2-11b": {"ord": null, "sec": 19.2, "wpm": 91}, "l2-12b": {"ord": null, "sec": 19.3, "wpm": 101}, "l3-01b": {"ord": null, "sec": 19.1, "wpm": 125}, "l3-02": {"ord": null, "sec": 21.3, "wpm": 123}, "l3-03": {"ord": null, "sec": 18.3, "wpm": 119}, "l3-04": {"ord": null, "sec": 17.6, "wpm": 106}, "l3-05b": {"ord": null, "sec": 17.9, "wpm": 119}, "l3-06": {"ord": null, "sec": 15.8, "wpm": 118}, "l3-07": {"ord": null, "sec": 18.2, "wpm": 132}, "l3-08": {"ord": null, "sec": 21.5, "wpm": 114}, "l3-09": {"ord": null, "sec": 17.1, "wpm": 122}, "l3-10": {"ord": null, "sec": 16.8, "wpm": 129}, "l3-11": {"ord": null, "sec": 17.1, "wpm": 119}, "l3-12": {"ord": null, "sec": 18.2, "wpm": 104}};
+const LAUDIO_VOICES = {"M": "Tom", "W": "Zoe", "Q": "Samantha"};
+const hasAudio = it => !!(it && LAUDIO[it.id]);
+let AUD = null;
+function audioEl(){
+  if(!AUD){ try{ AUD = new Audio(); AUD.preload = "auto"; }catch(e){ AUD = null; } }
+  return AUD;
+}
+function stopAudio(){ if(AUD){ try{ AUD.pause(); AUD.onended = null; AUD.onerror = null; }catch(e){} } }
+/* 音声ファイルを流す。読みこめないときは false を返す（端末の読み上げに切りかえる） */
+function playAudio(it, onDone, onFail){
+  const a = audioEl(); if(!a) return false;
+  stopAudio();
+  const rate = ({85:0.9, 100:1, 115:1.1})[Number(S.settings.lw)||100] || 1;
+  a.src = "audio/" + it.id + ".mp3";
+  try{ a.preservesPitch = true; a.webkitPreservesPitch = true; }catch(e){}
+  a.defaultPlaybackRate = rate; a.playbackRate = rate;
+  a.onended = () => { onDone && onDone(); };
+  a.onerror = () => { onFail && onFail(); };
+  const pr = a.play();
+  if(pr && pr.catch) pr.catch(() => { onFail && onFail(); });
+  return true;
+}
+const listenMode = () => (S.settings.lm==="listen" && (Object.keys(LAUDIO).length>0 || canSpeak())) ? "listen" : "read";
 
 /* ---------- 時間の表し方（パートごと） ---------- */
 const TUNIT = {
@@ -1364,21 +1390,27 @@ function pSetup(part){
   }else if(part==="li"){
     field("範囲", LPS, "lp", "第1部は対話の応答（選択肢3つ）、第2部は対話の内容、第3部は短い英文の内容についての問題です。");
     field("問題数", PNS, "pn");
-    if(canSpeak()){
+    const nAud = LI.filter(hasAudio).length;
+    if(nAud>0){
+      field("放送の速さ", [[85,"ゆっくり"],[100,"ふつう"],[115,"少し速め"]], "lw", "英検4級の放送は、はっきり読んで、文と文の間をしっかり取る読み方です。録音も、声は自然な速さのまま、間を長く取っています（平均で1分間に約110語）。「ゆっくり」は録音を0.9倍の速さで流します。");
+      const af = document.createElement("div"); af.className = "field";
+      af.innerHTML = '<span>声</span><p class="hint">放送は、録音した音声（男性：'+esc(LAUDIO_VOICES.M)+'、女性：'+esc(LAUDIO_VOICES.W)+'、質問：'+esc(LAUDIO_VOICES.Q)+'）で流れます（'+nAud+'問）。iPhone・iPad でも同じ声で聞けます。</p>';
+      body.appendChild(af);
+    }
+    if(canSpeak() && nAud < LI.length){
       field("読み上げの速さ", LWS, "lw", "英検4級の放送は、1分間に約100語の速さです（第3部は25語ほどの英文を約15秒で読みます）。「本番に近い」がおすすめです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
       const vt = document.createElement("div"); vt.className = "field";
       vt.innerHTML = '<span>声</span><p class="hint" id="voiceInfo"></p>'+
         '<label class="hint" style="display:block;margin-top:6px">男性の声：<select id="mvSel" class="qvsel"></select></label>'+
         '<label class="hint" style="display:block;margin-top:6px">質問を読む声：<select id="qvSel" class="qvsel"></select></label>'+
         '<p class="playrow"><button type="button" class="say" data-act="li-test">🔊 声と速さを確かめる</button> <span class="hint" id="voiceTest"></span></p>'+
-        '<details class="jad"><summary>声をもっと自然にするには（iPhone・iPad）</summary>'+
-        '<p>「設定」→「アクセシビリティ」→「リーダーと読み上げ」→「声」→「英語」を開き、英語（アメリカ）の女性の声 Zoe（プレミアム）と、男性の声 Tom または Evan をダウンロードします。「拡張」や「プレミアム」と付いたものは、さらに自然です。（iOS 18 までは「リーダーと読み上げ」の代わりに「読み上げコンテンツ」という名前です。）Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
+        '<p class="hint">iPhone・iPad の Safari では、「設定」→「アクセシビリティ」→「リーダーと読み上げ」でダウンロードした声は、Webページからは使えません（Apple の制限）。</p>';
       body.appendChild(vt);
       pickVoices(); voiceInfo();
       $id("qvSel").onchange = e => { S.settings.qv = e.target.value; saveData(S); pickVoices(); voiceInfo(); testQ(); };
       $id("mvSel").onchange = e => { S.settings.mv = e.target.value; saveData(S); pickVoices(); voiceInfo(); warmUpSpeech(); speakSeq([{t:"Hi, Emma. What are you doing this weekend?", who:"M", gap:300}]); };
     }
-    field("解き方", LMS, "lm", canSpeak()
+    field("解き方", LMS, "lm", (canSpeak() || nAud>0)
       ? "「聞いて解く」では、本番と同じく英文を見ずに聞いて答えます。第1部は選択肢も放送で聞きます。本番では2回放送されるので、2回まで聞くのがおすすめです。"
       : "この端末（またはブラウザ）は読み上げに対応していないため、文字で読んで解きます。");
   }
@@ -1774,7 +1806,7 @@ function speakSeq(seq, onDone){
   };
   step();
 }
-function stopSeq(){ SEQ_ID++; stopSpeech(); }
+function stopSeq(){ SEQ_ID++; stopSpeech(); stopAudio(); }
 /* 第3部の話し手：本文から男女を決め、決まらないときは問題ごとに交互にする */
 function narrator(it){
   if(it.nv) return it.nv;
@@ -1813,8 +1845,8 @@ function testVoices(){
 function renderLI(it){
   const mode = listenMode();
   pHeader(LPART[it.part]+"　"+(PX.i+1)+" / "+PX.list.length);
-  PX.ch = shuffle([it.k].concat(it.d));
   PX.mode = mode;
+  PX.ch = (mode==="listen" && it.part===1 && hasAudio(it) && LAUDIO[it.id].ord) ? LAUDIO[it.id].ord.slice() : shuffle([it.k].concat(it.d));
   $id("pPass").innerHTML = "";
   const guide = it.part===1 ? "対話を聞き、最後の発言に対する応答として最も適切なものを選びます。"
               : it.part===2 ? "対話と質問を聞き、答えとして最も適切なものを選びます。"
@@ -1836,7 +1868,14 @@ function playLI(){
   warmUpSpeech();
   PX.plays++;
   PX.playing = true;
-  speakSeq(liSeq(it, true), (w, endAt)=>{ PX.playing = false; PX.audioEnd = endAt; showWpm(w); });
+  const tts = () => { PX.playing = true; speakSeq(liSeq(it, true), (w, endAt)=>{ PX.playing = false; PX.audioEnd = endAt; showWpm(w); }); };
+  if(hasAudio(it)){
+    const ok = playAudio(it, () => {
+      PX.playing = false; PX.audioEnd = Date.now();
+      const el = $id("liWpm"); if(el) el.textContent = "放送の速さ：約" + Math.round(LAUDIO[it.id].wpm * (({85:0.9, 100:1, 115:1.1})[Number(S.settings.lw)||100] || 1)) + "語/分";
+    }, () => { if(canSpeak()) tts(); else PX.playing = false; });
+    if(!ok){ if(canSpeak()) tts(); }
+  }else if(canSpeak()) tts();
   const b = $id("liPlay");
   if(b) b.textContent = PX.plays>=2 ? "🔊 もう一度聞く（"+(PX.plays+1)+"回目）" : "🔊 もう一度聞く（2回目）";
 }
@@ -1851,7 +1890,7 @@ function answerLI(i){
   card.innerHTML = '<p class="qtype">'+LPART[it.part]+'　放送された英文'+(it.clue?'（<mark class="clue">色の付いた部分</mark>が根拠）':'')+'</p>'+
     dlgHTML(it.L,{jaSpk:true, clue:it.clue})+
     (it.part!==1 ? '<p class="hq"><span class="hqlabel">Question</span><span class="en">'+esc(it.q)+'</span></p>' : '')+
-    (canSpeak() ? '<p class="playrow"><button type="button" class="say small" data-act="li-replay">🔊 もう一度聞く</button></p><p class="hint" id="liWpm"></p>' : '')+
+    ((canSpeak()||hasAudio(it)) ? '<p class="playrow"><button type="button" class="say small" data-act="li-replay">🔊 もう一度聞く</button></p><p class="hint" id="liWpm"></p>' : '')+
     markSvg(ok);
   $id("pAns").innerHTML = '<div class="answer">'+headHTML(ok)+
     '<div class="en">'+esc(it.k)+'</div>'+
@@ -1950,7 +1989,12 @@ document.addEventListener("click", e=>{
   }
   if(a==="p3-check"){ if(PX.stage==="ask" && PX.placed.length===5) answerP3(); return; }
   if(a==="li-play"){ playLI(); return; }
-  if(a==="li-replay"){ warmUpSpeech(); speakSeq(liSeq(PX.list[PX.i], false), showWpm); return; }
+  if(a==="li-replay"){
+    const it = PX.list[PX.i];
+    if(hasAudio(it)){ playAudio(it, null, () => { if(canSpeak()){ warmUpSpeech(); speakSeq(liSeq(it, false), showWpm); } }); }
+    else{ warmUpSpeech(); speakSeq(liSeq(it, false), showWpm); }
+    return;
+  }
   if(a==="li-test"){ testVoices(); return; }
   if(a==="pr-retry"){
     let list = shuffle(PX.wrong.slice());
