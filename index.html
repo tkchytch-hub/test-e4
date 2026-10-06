@@ -1277,7 +1277,7 @@ function weakFirst(arr, p, idf){
 /* ---------- 録音した音声（audio フォルダの mp3） ----------
    Mac の Tom（男性）・Zoe（女性）の声で、1分間に100語の速さで作った音声。
    ord：第1部の選択肢の順番（音声で読む順）　sec：音声の長さ（秒）　w：本文の語数 */
-const LAUDIO = {"l1-01": {"ord": ["Chicken and rice.", "At seven o'clock.", "In the kitchen."], "sec": 18.2, "wpm": 103}, "l1-02": {"ord": ["At the shop near the station.", "Last Sunday.", "It was five dollars."], "sec": 24.1, "wpm": 96}, "l1-03": {"ord": ["Oh, thanks.", "Yes, I am.", "See you tomorrow."], "sec": 24.0, "wpm": 91}, "l1-04": {"ord": ["It's blue.", "Thank you very much.", "That's my pen."], "sec": 21.9, "wpm": 89}, "l1-05": {"ord": ["It was fun.", "Let's meet at six.", "I went there yesterday."], "sec": 22.9, "wpm": 100}, "l1-06b": {"ord": ["OK. Have fun.", "It's next to the park.", "No, it's Kevin's."], "sec": 23.5, "wpm": 114}, "l1-07b": {"ord": ["Around five.", "At the library.", "He's my brother."], "sec": 22.2, "wpm": 104}, "l1-08": {"ord": ["No, for Christmas.", "Yes, she's seventy.", "It's very cold."], "sec": 21.6, "wpm": 109}, "l1-09b": {"ord": ["Saturday is better.", "I went there last year.", "It's very hot."], "sec": 20.4, "wpm": 125}, "l1-10": {"ord": ["No, it's only five minutes away.", "Yes, I like books.", "It's on Monday."], "sec": 24.1, "wpm": 112}, "l1-11": {"ord": ["In the music room.", "For two years.", "My brother did."], "sec": 20.5, "wpm": 103}, "l1-12b": {"ord": ["Thanks a lot.", "I'm sorry to hear that.", "It's sunny today."], "sec": 21.9, "wpm": 88}, "l2-01b": {"ord": null, "sec": 17.9, "wpm": 116}, "l2-02": {"ord": null, "sec": 22.9, "wpm": 94}, "l2-03b": {"ord": null, "sec": 21.6, "wpm": 90}, "l2-04": {"ord": null, "sec": 19.9, "wpm": 90}, "l2-05b": {"ord": null, "sec": 19.7, "wpm": 104}, "l2-06b": {"ord": null, "sec": 19.3, "wpm": 119}, "l2-07b": {"ord": null, "sec": 16.4, "wpm": 87}, "l2-08b": {"ord": null, "sec": 17.4, "wpm": 115}, "l2-09b": {"ord": null, "sec": 20.0, "wpm": 120}, "l2-10": {"ord": null, "sec": 19.8, "wpm": 112}, "l2-11b": {"ord": null, "sec": 19.2, "wpm": 91}, "l2-12b": {"ord": null, "sec": 19.3, "wpm": 101}, "l3-01b": {"ord": null, "sec": 19.1, "wpm": 125}, "l3-02": {"ord": null, "sec": 21.3, "wpm": 123}, "l3-03": {"ord": null, "sec": 18.3, "wpm": 119}, "l3-04": {"ord": null, "sec": 17.6, "wpm": 106}, "l3-05b": {"ord": null, "sec": 17.9, "wpm": 119}, "l3-06": {"ord": null, "sec": 15.8, "wpm": 118}, "l3-07": {"ord": null, "sec": 18.2, "wpm": 132}, "l3-08": {"ord": null, "sec": 21.5, "wpm": 114}, "l3-09": {"ord": null, "sec": 17.1, "wpm": 122}, "l3-10": {"ord": null, "sec": 16.8, "wpm": 129}, "l3-11": {"ord": null, "sec": 17.1, "wpm": 119}, "l3-12": {"ord": null, "sec": 18.2, "wpm": 104}};
+const LAUDIO = {"l1-01": {"ord": ["Chicken and rice.", "At seven o'clock.", "In the kitchen."], "sec": 15.2, "wpm": 129}, "l1-02": {"ord": ["At the shop near the station.", "Last Sunday.", "It was five dollars."], "sec": 19.9, "wpm": 121}, "l1-03": {"ord": ["Oh, thanks.", "Yes, I am.", "See you tomorrow."], "sec": 19.5, "wpm": 115}, "l1-04": {"ord": ["It's blue.", "Thank you very much.", "That's my pen."], "sec": 18.2, "wpm": 109}, "l1-05": {"ord": ["It was fun.", "Let's meet at six.", "I went there yesterday."], "sec": 19.2, "wpm": 127}, "l1-06b": {"ord": ["OK. Have fun.", "It's next to the park.", "No, it's Kevin's."], "sec": 19.8, "wpm": 131}, "l1-07b": {"ord": ["Around five.", "At the library.", "He's my brother."], "sec": 18.5, "wpm": 126}, "l1-08": {"ord": ["No, for Christmas.", "Yes, she's seventy.", "It's very cold."], "sec": 18.1, "wpm": 128}, "l1-09b": {"ord": ["Saturday is better.", "I went there last year.", "It's very hot."], "sec": 18.0, "wpm": 141}, "l1-10": {"ord": ["No, it's only five minutes away.", "Yes, I like books.", "It's on Monday."], "sec": 20.4, "wpm": 132}, "l1-11": {"ord": ["In the music room.", "For two years.", "My brother did."], "sec": 17.6, "wpm": 125}, "l1-12b": {"ord": ["Thanks a lot.", "I'm sorry to hear that.", "It's sunny today."], "sec": 18.4, "wpm": 112}, "l2-01b": {"ord": null, "sec": 15.4, "wpm": 137}, "l2-02": {"ord": null, "sec": 18.9, "wpm": 114}, "l2-03b": {"ord": null, "sec": 17.7, "wpm": 114}, "l2-04": {"ord": null, "sec": 16.7, "wpm": 108}, "l2-05b": {"ord": null, "sec": 16.5, "wpm": 122}, "l2-06b": {"ord": null, "sec": 16.5, "wpm": 141}, "l2-07b": {"ord": null, "sec": 12.9, "wpm": 111}, "l2-08b": {"ord": null, "sec": 14.6, "wpm": 140}, "l2-09b": {"ord": null, "sec": 17.0, "wpm": 143}, "l2-10": {"ord": null, "sec": 16.8, "wpm": 133}, "l2-11b": {"ord": null, "sec": 15.5, "wpm": 116}, "l2-12b": {"ord": null, "sec": 15.7, "wpm": 125}, "l3-01b": {"ord": null, "sec": 17.1, "wpm": 138}, "l3-02": {"ord": null, "sec": 19.5, "wpm": 133}, "l3-03": {"ord": null, "sec": 16.1, "wpm": 136}, "l3-04": {"ord": null, "sec": 15.1, "wpm": 122}, "l3-05b": {"ord": null, "sec": 16.6, "wpm": 126}, "l3-06": {"ord": null, "sec": 14.4, "wpm": 124}, "l3-07": {"ord": null, "sec": 16.5, "wpm": 142}, "l3-08": {"ord": null, "sec": 19.2, "wpm": 123}, "l3-09": {"ord": null, "sec": 15.7, "wpm": 130}, "l3-10": {"ord": null, "sec": 15.3, "wpm": 136}, "l3-11": {"ord": null, "sec": 15.4, "wpm": 129}, "l3-12": {"ord": null, "sec": 15.7, "wpm": 120}};
 const LAUDIO_VOICES = {"M": "Tom", "W": "Zoe", "Q": "Samantha"};
 const hasAudio = it => !!(it && LAUDIO[it.id]);
 let AUD = null;
@@ -1397,13 +1397,13 @@ function pSetup(part){
     field("問題数", PNS, "pn");
     const nAud = LI.filter(hasAudio).length;
     if(nAud>0){
-      field("放送の速さ", [[85,"ゆっくり"],[100,"ふつう"],[115,"少し速め"]], "lw", "英検4級の放送は、はっきり読んで、文と文の間をしっかり取る読み方です。録音も、声は自然な速さのまま、間を長く取っています（平均で1分間に約110語）。「ゆっくり」は録音を0.9倍の速さで流します。");
+      field("放送の速さ", [[85,"ゆっくり"],[100,"ふつう"],[115,"少し速め"]], "lw", "録音は、本番の放送（4級）を測った速さと間の取り方に合わせています（話す速さは1分間に約150語、文と文の間は約0.6秒、話し手の交代は約0.5秒）。「ゆっくり」は録音を0.9倍の速さで流します。");
       const af = document.createElement("div"); af.className = "field";
       af.innerHTML = '<span>声</span><p class="hint">放送は、録音した音声（男性：'+esc(LAUDIO_VOICES.M)+'、女性：'+esc(LAUDIO_VOICES.W)+'、質問：'+esc(LAUDIO_VOICES.Q)+'）で流れます（'+nAud+'問）。iPhone・iPad でも同じ声で聞けます。</p>';
       body.appendChild(af);
     }
     if(canSpeak() && nAud < LI.length){
-      field("読み上げの速さ", LWS, "lw", "英検4級の放送は、1分間に約100語の速さです（第3部は25語ほどの英文を約15秒で読みます）。「本番に近い」がおすすめです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
+      field("読み上げの速さ", LWS, "lw", "英検4級の放送は、第3部の25語ほどの英文を約12秒で読む速さです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
       const vt = document.createElement("div"); vt.className = "field";
       vt.innerHTML = '<span>声</span><p class="hint" id="voiceInfo"></p>'+
         '<label class="hint" style="display:block;margin-top:6px">男性の声：<select id="mvSel" class="qvsel"></select></label>'+
@@ -1674,7 +1674,9 @@ const V_MALE   = ["Tom","Evan","Nathan","Aaron","Alex","Guy","Davis","Andrew","B
 const V_MALE_BACKUP = ["Reed","Eddy","Rocko","Fred","Grandpa"];
 /* おもしろ声・ロボット風の声は使わない */
 const V_SKIP = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Eddy|Flo|Grandma|Grandpa|Rocko|Sandy|Shelley|Reed|Kathy|Victoria|Vicki|Agnes|Bruce|Princess|Hysterical|Deranged|Pipe|Ana\b|Novelty/i;
-const LWS = [[85,"ゆっくり（85語/分）"],[100,"本番に近い（100語/分）"],[115,"少し速め（115語/分）"]];
+const LWS = [[85,"ゆっくり"],[100,"本番に近い"],[115,"少し速め"]];
+/* 端末の読み上げを使うときの目標の速さ（1分間の語数）。本番の4級の放送を測ると、全体で約128語/分 */
+const LW_TARGET = {85:110, 100:128, 115:145};
 let VO = null;   // {W, M, wPitch, mPitch}
 function vName(v){ return v ? v.name.replace(/\s*\(.*?\)\s*/g," ").replace(/Microsoft\s+|\s+Online.*$|\s+-\s+English.*$/g,"").trim() : ""; }
 function vRank(v, list){
@@ -1771,7 +1773,7 @@ function speakSeq(seq, onDone){
   try{ synth.cancel(); }catch(e){}
   if(!VO || !VO.W) pickVoices();
   const id = ++SEQ_ID;
-  const target = Number(S.settings.lw) || 100;
+  const target = LW_TARGET[Number(S.settings.lw)||100] || 128;
   let i = 0, words = 0, ms = 0, endAt = 0;
   const step = () => {
     if(id !== SEQ_ID) return;                     // 別の読み上げが始まったら止める
@@ -1833,7 +1835,7 @@ function liSeq(it, withChoices){
 }
 function showWpm(w){
   const el = $id("liWpm");
-  if(el && w > 0) el.textContent = "今の放送の速さ：約" + w + "語/分（目標 " + (Number(S.settings.lw)||100) + "語/分）";
+  if(el && w > 0) el.textContent = "今の放送の速さ：約" + w + "語/分（目標 " + (LW_TARGET[Number(S.settings.lw)||100]||128) + "語/分）";
 }
 function testQ(){
   warmUpSpeech();
