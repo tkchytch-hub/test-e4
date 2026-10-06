@@ -203,6 +203,7 @@ body{
 .ptable td:first-child,.ptable th:first-child{text-align:left}
 .ptable td.tm{color:var(--ai)}
 .ptable small{color:var(--muted);font-size:10px}
+.qvsel{font-family:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--rule);border-radius:3px;background:#fff;color:var(--ink);max-width:100%}
 .gtabs{margin-top:14px;display:grid !important;grid-template-columns:repeat(3,1fr);gap:5px}
 .gtabs button{padding:7px 4px !important;font-size:12px !important;min-width:0 !important;text-align:center}
 
@@ -1020,7 +1021,7 @@ const defaults = () => ({
   daily:{},   // "YYYY-MM-DD": [解答数, 正解数, 解答にかかった合計ミリ秒]
   weak:{},    // 語: まちがえた回数
   settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on",
-             gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100 },
+             gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100, qv:"" },
   parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング）
   pweak:{},   // "パート:問題id": まちがえた回数
   pdaily:{}   // "日付": {パート: [解答数, 正解数, 時間の合計ミリ秒, 時間を計った数]}
@@ -1367,11 +1368,13 @@ function pSetup(part){
       field("読み上げの速さ", LWS, "lw", "英検4級の放送は、1分間に約100語の速さです（第3部は25語ほどの英文を約15秒で読みます）。「本番に近い」がおすすめです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
       const vt = document.createElement("div"); vt.className = "field";
       vt.innerHTML = '<span>声</span><p class="hint" id="voiceInfo"></p>'+
+        '<label class="hint" style="display:block;margin-top:6px">質問を読む声：<select id="qvSel" class="qvsel"></select></label>'+
         '<p class="playrow"><button type="button" class="say" data-act="li-test">🔊 声と速さを確かめる</button> <span class="hint" id="voiceTest"></span></p>'+
         '<details class="jad"><summary>声をもっと自然にするには（iPhone・iPad）</summary>'+
         '<p>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」→「英語」を開き、英語（アメリカ）の女性の声（Ava など）と男性の声（Evan・Nathan・Tom など）で、名前に「拡張」または「プレミアム」と付いたものをダウンロードします。Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
       body.appendChild(vt);
       pickVoices(); voiceInfo();
+      $id("qvSel").onchange = e => { S.settings.qv = e.target.value; saveData(S); pickVoices(); voiceInfo(); testQ(); };
     }
     field("解き方", LMS, "lm", canSpeak()
       ? "「聞いて解く」では、本番と同じく英文を見ずに聞いて答えます。第1部は選択肢も放送で聞きます。本番では2回放送されるので、2回まで聞くのがおすすめです。"
@@ -1621,12 +1624,12 @@ function answerP4(i){
 /* ---------- リスニングの声と速さ ----------
    男女で別の声（アメリカ英語）を使う。名前で男女を見分ける。
    速さは「1分間の語数（WPM）」で決める。声ごとに実際の読み上げ時間を測って、目標の速さに近づける。 */
-const V_FEMALE = ["Ava","Samantha","Allison","Susan","Zoe","Nicky","Joelle","Noelle","Kathy","Victoria",
-                  "Aria","Jenny","Michelle","Ana","Emma","Ashley","Cora","Elizabeth","Monica","Sara","Zira","Google US English"];
-const V_MALE   = ["Evan","Nathan","Tom","Aaron","Alex","Reed","Guy","Davis","Andrew","Brian","Christopher","Eric",
+/* 自然に聞こえる声だけを候補にする（古い機械的な声・子どもの声は入れない） */
+const V_FEMALE = ["Ava","Samantha","Allison","Susan","Zoe","Nicky","Joelle","Noelle",
+                  "Aria","Jenny","Michelle","Emma","Ashley","Cora","Elizabeth","Monica","Sara","Zira","Google US English"];
+const V_MALE   = ["Evan","Nathan","Tom","Aaron","Alex","Guy","Davis","Andrew","Brian","Christopher","Eric",
                   "Roger","Steffan","Jason","Tony","David","Mark"];
-/* おもしろ声・ロボット風の声は使わない */
-const V_SKIP = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Eddy|Flo|Grandma|Grandpa|Rocko|Sandy|Shelley|Novelty/i;
+const V_SKIP = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Eddy|Flo|Grandma|Grandpa|Rocko|Sandy|Shelley|Reed|Kathy|Victoria|Vicki|Agnes|Bruce|Princess|Hysterical|Deranged|Pipe|Ana\b|Novelty/i;
 const LWS = [[85,"ゆっくり（85語/分）"],[100,"本番に近い（100語/分）"],[115,"少し速め（115語/分）"]];
 let VO = null;   // {W, M, wPitch, mPitch}
 function vName(v){ return v ? v.name.replace(/\s*\(.*?\)\s*/g," ").replace(/Microsoft\s+|\s+Online.*$|\s+-\s+English.*$/g,"").trim() : ""; }
@@ -1649,11 +1652,16 @@ function pickVoices(){
   const best = list => pool.map(v=>({v, s:vRank(v,list)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0];
   const f = best(V_FEMALE), m = best(V_MALE);
   /* 質問を読むアナウンサー：本番と同じく、対話の女性とは別の女性の声にする */
-  const q = f ? pool.filter(v=>v!==f.v).map(v=>({v, s:vRank(v,V_FEMALE)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0] : null;
+  /* 同じ人の声の別バージョン（Ava と Ava (Premium) など）は、別の人に聞こえないので選ばない */
+  const base = v => vName(v).split(" ")[0];
+  const q = f ? pool.filter(v=>v!==f.v && base(v)!==base(f.v)).map(v=>({v, s:vRank(v,V_FEMALE)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0] : null;
+
   const any = pool[0] || null;
   const W = f ? f.v : (m ? m.v : any);
   const M = m ? m.v : (f ? f.v : any);
-  VO = { W, M, Q: q ? q.v : W,
+  /* 先生が選んだ声があれば、それを使う */
+  const pickQ = S.settings.qv==="same" ? W : (S.settings.qv ? (pool.find(v=>v.name===S.settings.qv) || null) : null);
+  VO = { W, M, Q: pickQ || (q ? q.v : W), pool,
          wPitch: (!f && m) ? 1.3 : 1,      // 女性の声がないときは、男性の声を高くして代わりにする
          mPitch: (!m && f) ? 0.75 : 1,     // 男性の声がないときは、女性の声を低くして代わりにする
          same: !(f && m) };
@@ -1662,14 +1670,23 @@ function pickVoices(){
 if(synth){
   try{ synth.addEventListener ? synth.addEventListener("voiceschanged", ()=>{ pickVoices(); voiceInfo(); }) : null; }catch(e){}
 }
+function qvSelect(){
+  const sel = $id("qvSel"); if(!sel || !VO || !VO.pool) return;
+  const cands = VO.pool.filter(v=>vRank(v,V_FEMALE)>=0).sort((a,b)=>vRank(b,V_FEMALE)-vRank(a,V_FEMALE));
+  sel.innerHTML = '<option value="">自動（対話の女性とは別の女性の声）</option><option value="same">対話の女性と同じ声</option>'+
+    cands.map(v=>'<option value="'+esc(v.name)+'">'+esc(vName(v))+(/Premium|Enhanced|Natural|Neural/i.test(v.name)?'（高音質）':'')+'</option>').join("");
+  sel.value = S.settings.qv || "";
+  if(sel.value !== (S.settings.qv||"")) sel.value = "";
+}
 function voiceInfo(){
+  qvSelect();
   const el = $id("voiceInfo"); if(!el) return;
   if(!canSpeak()){ el.textContent = "この端末（またはブラウザ）は読み上げに対応していません。"; return; }
   if(!VO) pickVoices();
   if(!VO || !VO.W){ el.textContent = "英語の声が見つかりません。"; return; }
   el.textContent = "男性の声：" + vName(VO.M) + (VO.mPitch!==1?"（女性の声を低くしています）":"") +
                    "　女性の声：" + vName(VO.W) + (VO.wPitch!==1?"（男性の声を高くしています）":"") +
-                   "　質問を読む声：" + vName(VO.Q) + (VO.Q===VO.W?"（女性の声を少し高くしています）":"") +
+                   "　質問を読む声：" + vName(VO.Q) + (VO.Q===VO.W?"（対話の女性と同じ声）":"") +
                    (VO.same ? "。この端末には英語の男性・女性の声がそろっていないため、声の高さで区別しています。" : "");
 }
 /* 声ごとの「rate=1 のときの WPM」。測るたびに更新し、記録と一緒に保存する */
@@ -1706,7 +1723,7 @@ function speakSeq(seq, onDone){
       const isM = s.who === "M", isQ = s.who === "Q";
       const v = VO ? (isQ ? VO.Q : isM ? VO.M : VO.W) : null;
       if(v) u.voice = v;
-      u.pitch = VO ? (isM ? VO.mPitch : (isQ && VO.Q===VO.W ? VO.wPitch*1.08 : VO.wPitch)) : 1;
+      u.pitch = VO ? (isM ? VO.mPitch : (isQ ? 1 : VO.wPitch)) : 1;
       const rate = Math.max(0.45, Math.min(1.3, target / calOf(v)));
       u.rate = rate;
       const n = wordCount(s.t);
@@ -1753,6 +1770,10 @@ function liSeq(it, withChoices){
 function showWpm(w){
   const el = $id("liWpm");
   if(el && w > 0) el.textContent = "今の放送の速さ：約" + w + "語/分（目標 " + (Number(S.settings.lw)||100) + "語/分）";
+}
+function testQ(){
+  warmUpSpeech();
+  speakSeq([{t:"Question. What will the girl do this weekend?", who:"Q", gap:300}]);
 }
 function testVoices(){
   warmUpSpeech();
