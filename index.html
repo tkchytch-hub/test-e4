@@ -1021,7 +1021,7 @@ const defaults = () => ({
   daily:{},   // "YYYY-MM-DD": [解答数, 正解数, 解答にかかった合計ミリ秒]
   weak:{},    // 語: まちがえた回数
   settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on",
-             gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100, qv:"" },
+             gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100, qv:"", mv:"" },
   parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング）
   pweak:{},   // "パート:問題id": まちがえた回数
   pdaily:{}   // "日付": {パート: [解答数, 正解数, 時間の合計ミリ秒, 時間を計った数]}
@@ -1368,13 +1368,15 @@ function pSetup(part){
       field("読み上げの速さ", LWS, "lw", "英検4級の放送は、1分間に約100語の速さです（第3部は25語ほどの英文を約15秒で読みます）。「本番に近い」がおすすめです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
       const vt = document.createElement("div"); vt.className = "field";
       vt.innerHTML = '<span>声</span><p class="hint" id="voiceInfo"></p>'+
+        '<label class="hint" style="display:block;margin-top:6px">男性の声：<select id="mvSel" class="qvsel"></select></label>'+
         '<label class="hint" style="display:block;margin-top:6px">質問を読む声：<select id="qvSel" class="qvsel"></select></label>'+
         '<p class="playrow"><button type="button" class="say" data-act="li-test">🔊 声と速さを確かめる</button> <span class="hint" id="voiceTest"></span></p>'+
         '<details class="jad"><summary>声をもっと自然にするには（iPhone・iPad）</summary>'+
-        '<p>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」→「英語」を開き、英語（アメリカ）の女性の声（Ava など）と男性の声（Evan・Nathan・Tom など）で、名前に「拡張」または「プレミアム」と付いたものをダウンロードします。Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
+        '<p>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」→「英語」を開き、英語（アメリカ）の女性の声（Ava など）と男性の声（Aaron・Evan・Nathan・Tom など）をダウンロードします。名前に「拡張」または「プレミアム」と付いたものは、さらに自然です。Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
       body.appendChild(vt);
       pickVoices(); voiceInfo();
       $id("qvSel").onchange = e => { S.settings.qv = e.target.value; saveData(S); pickVoices(); voiceInfo(); testQ(); };
+      $id("mvSel").onchange = e => { S.settings.mv = e.target.value; saveData(S); pickVoices(); voiceInfo(); warmUpSpeech(); speakSeq([{t:"Hi, Emma. What are you doing this weekend?", who:"M", gap:300}]); };
     }
     field("解き方", LMS, "lm", canSpeak()
       ? "「聞いて解く」では、本番と同じく英文を見ずに聞いて答えます。第1部は選択肢も放送で聞きます。本番では2回放送されるので、2回まで聞くのがおすすめです。"
@@ -1629,6 +1631,9 @@ const V_FEMALE = ["Ava","Samantha","Allison","Susan","Zoe","Nicky","Joelle","Noe
                   "Aria","Jenny","Michelle","Emma","Ashley","Cora","Elizabeth","Monica","Sara","Zira","Google US English"];
 const V_MALE   = ["Evan","Nathan","Tom","Aaron","Alex","Guy","Davis","Andrew","Brian","Christopher","Eric",
                   "Roger","Steffan","Jason","Tony","David","Mark"];
+/* 自然な男性の声がない端末で、女性の声を低くするより先に使う男性の声（少し機械的） */
+const V_MALE_BACKUP = ["Reed","Eddy","Rocko","Fred","Grandpa"];
+/* おもしろ声・ロボット風の声は使わない */
 const V_SKIP = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Eddy|Flo|Grandma|Grandpa|Rocko|Sandy|Shelley|Reed|Kathy|Victoria|Vicki|Agnes|Bruce|Princess|Hysterical|Deranged|Pipe|Ana\b|Novelty/i;
 const LWS = [[85,"ゆっくり（85語/分）"],[100,"本番に近い（100語/分）"],[115,"少し速め（115語/分）"]];
 let VO = null;   // {W, M, wPitch, mPitch}
@@ -1656,15 +1661,26 @@ function pickVoices(){
   const base = v => vName(v).split(" ")[0];
   const q = f ? pool.filter(v=>v!==f.v && base(v)!==base(f.v)).map(v=>({v, s:vRank(v,V_FEMALE)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0] : null;
 
+  /* 自然な男性の声がないときの代わり（Reed など） */
+  const enAll = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+  const usAll = enAll.filter(v => /^en[-_]US/i.test(v.lang));
+  const bpool = usAll.length ? usAll : enAll;
+  const mb = m ? null : bpool.map(v=>({v, s:vRank(v,V_MALE_BACKUP)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0];
+  const males = pool.filter(v=>vRank(v,V_MALE)>=0).concat(bpool.filter(v=>vRank(v,V_MALE_BACKUP)>=0));
   const any = pool[0] || null;
-  const W = f ? f.v : (m ? m.v : any);
-  const M = m ? m.v : (f ? f.v : any);
+  const W = f ? f.v : (m ? m.v : (mb ? mb.v : any));
+  /* 先生が選んだ男性の声があれば、それを使う */
+  const pickM = S.settings.mv ? (males.find(v=>v.name===S.settings.mv) || null) : null;
+  const mAuto = m ? m.v : (mb ? mb.v : null);
+  const M = pickM || mAuto || (f ? f.v : any);
+  const hasM = !!(pickM || mAuto);
   /* 先生が選んだ声があれば、それを使う */
   const pickQ = S.settings.qv==="same" ? W : (S.settings.qv ? (pool.find(v=>v.name===S.settings.qv) || null) : null);
-  VO = { W, M, Q: pickQ || (q ? q.v : W), pool,
-         wPitch: (!f && m) ? 1.3 : 1,      // 女性の声がないときは、男性の声を高くして代わりにする
-         mPitch: (!m && f) ? 0.75 : 1,     // 男性の声がないときは、女性の声を低くして代わりにする
-         same: !(f && m) };
+  VO = { W, M, Q: pickQ || (q ? q.v : W), pool, males,
+         backupM: !m && !pickM && !!mb,
+         wPitch: (!f && hasM) ? 1.3 : 1,   // 女性の声がないときは、男性の声を高くして代わりにする
+         mPitch: (!hasM && f) ? 0.75 : 1,  // 男性の声がまったくないときだけ、女性の声を低くして代わりにする
+         same: !(f && hasM) };
   return VO;
 }
 if(synth){
@@ -1678,13 +1694,21 @@ function qvSelect(){
   sel.value = S.settings.qv || "";
   if(sel.value !== (S.settings.qv||"")) sel.value = "";
 }
+function mvSelect(){
+  const sel = $id("mvSel"); if(!sel || !VO || !VO.males) return;
+  sel.innerHTML = '<option value="">自動</option>'+
+    VO.males.map(v=>'<option value="'+esc(v.name)+'">'+esc(vName(v))+(/Premium|Enhanced|Natural|Neural/i.test(v.name)?'（高音質）':vRank(v,V_MALE_BACKUP)>=0?'（少し機械的）':'')+'</option>').join("");
+  sel.value = S.settings.mv || "";
+  if(sel.value !== (S.settings.mv||"")) sel.value = "";
+}
 function voiceInfo(){
-  qvSelect();
+  qvSelect(); mvSelect();
   const el = $id("voiceInfo"); if(!el) return;
   if(!canSpeak()){ el.textContent = "この端末（またはブラウザ）は読み上げに対応していません。"; return; }
   if(!VO) pickVoices();
   if(!VO || !VO.W){ el.textContent = "英語の声が見つかりません。"; return; }
-  el.textContent = "男性の声：" + vName(VO.M) + (VO.mPitch!==1?"（女性の声を低くしています）":"") +
+  el.textContent = "男性の声：" + vName(VO.M) + (VO.mPitch!==1?"（男性の声がないため、女性の声を低くしています）":"") +
+                   (VO.backupM?"（自然な男性の声がないため、代わりの声を使っています。下の手順で Aaron・Evan などを入れると自然になります）":"") +
                    "　女性の声：" + vName(VO.W) + (VO.wPitch!==1?"（男性の声を高くしています）":"") +
                    "　質問を読む声：" + vName(VO.Q) + (VO.Q===VO.W?"（対話の女性と同じ声）":"") +
                    (VO.same ? "。この端末には英語の男性・女性の声がそろっていないため、声の高さで区別しています。" : "");
