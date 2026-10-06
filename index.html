@@ -197,6 +197,15 @@ body{
 .msg{font-family:var(--mincho);font-size:18px;margin:0 0 12px}
 .foot{text-align:center;margin-top:20px}
 
+.ptable{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.ptable th,.ptable td{padding:5px 4px;border-bottom:1px dotted var(--rule);text-align:right;white-space:nowrap}
+.ptable th{font-weight:400;color:var(--muted);font-size:11px}
+.ptable td:first-child,.ptable th:first-child{text-align:left}
+.ptable td.tm{color:var(--ai)}
+.ptable small{color:var(--muted);font-size:10px}
+.gtabs{margin-top:14px;display:grid !important;grid-template-columns:repeat(3,1fr);gap:5px}
+.gtabs button{padding:7px 4px !important;font-size:12px !important;min-width:0 !important;text-align:center}
+
 /* ---- パートの一覧 ---- */
 .parts{display:grid;gap:7px}
 .part{
@@ -263,6 +272,7 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
 
 /* ---- 記録が保存できないときの知らせ ---- */
 .storewarn{background:var(--shu-soft);border:1px solid var(--shu);color:var(--shu);border-radius:4px;padding:10px 12px;margin:0 0 11px;font-size:14px;font-weight:700}
+.bkremind{background:var(--ai-soft);border:1px solid var(--ai);color:var(--ai);border-radius:4px;padding:9px 12px;margin:0 0 11px;font-size:13px}
 .storewarn small{display:block;font-weight:400;font-size:12px;color:var(--ink);margin-top:2px}
 /* ---- 記録の引き継ぎ ---- */
 .backup textarea{
@@ -307,6 +317,7 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
     <span class="date" id="todayLabel"></span>
   </div>
 
+  <p class="bkremind" id="bkRemind" hidden></p>
   <p class="storewarn" id="storeWarn" hidden>この画面では記録が保存されません<small>問題は解けますが、ページを閉じると記録が消えます。</small></p>
 
   <div class="card">
@@ -321,8 +332,9 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
   <div class="card">
     <h2>今日の正答率</h2>
     <div id="todayBlock"></div>
+    <div class="seg gtabs" id="gTabs"></div>
     <div class="week" id="week"></div>
-    <p class="hint" style="text-align:center">上段＝正答率（％）　下段＝1問あたりの平均秒数</p>
+    <p class="hint" style="text-align:center" id="weekHint"></p>
   </div>
 
   <div class="card">
@@ -902,12 +914,17 @@ function migrateOldKeys(){
 
 async function loadData(){
   storeOK = probeStore();
+  try{ if(storeOK && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
   if(storeOK){
     migrateOldKeys();
+    let raw = null;
     try{
-      const v = getLS().getItem(KEY);
-      if(v) return JSON.parse(v);
-    }catch(e){ /* 壊れた記録は読まない */ }
+      raw = getLS().getItem(KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){
+      /* 読めない記録は、上書きする前に別のキーに残しておく */
+      try{ if(raw) getLS().setItem(KEY+"-unreadable", raw); }catch(e2){}
+    }
     return null;
   }
   try{ return memoryFallback[KEY] ? JSON.parse(memoryFallback[KEY]) : null; }catch(e){ return null; }
@@ -1003,9 +1020,10 @@ const defaults = () => ({
   daily:{},   // "YYYY-MM-DD": [解答数, 正解数, 解答にかかった合計ミリ秒]
   weak:{},    // 語: まちがえた回数
   settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on",
-             pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen" },
+             gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100 },
   parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング）
-  pweak:{}    // "パート:問題id": まちがえた回数
+  pweak:{},   // "パート:問題id": まちがえた回数
+  pdaily:{}   // "日付": {パート: [解答数, 正解数, 時間の合計ミリ秒, 時間を計った数]}
 });
 let S = defaults();
 let quiz = null;
@@ -1168,49 +1186,53 @@ const R4 = [
 ];
 
 /* ---------- リスニング ----------
-   第1部：対話の最後の発言に合う応答（選択肢3つ。本番では選択肢も放送されます）
-   第2部：対話の内容についての質問　第3部：短い英文の内容についての質問
-   話し手：M=男性 / W=女性 / N=ナレーション */
+   本番の放送原稿の作りに合わせている（英文はすべて書き下ろし）：
+   第1部：対話は3行（A→B→A）。選択肢3つは、最後に話した人の相手（B）が読む。
+   第2部：対話は4行（A→B→A→B）。質問は別の女性のアナウンサーが読む。
+   第3部：3文・25語前後。話し手の性別に合わせた声で読み、質問は the boy / the girl などで指す。
+          まちがいの選択肢には、放送に出てくる別の人・時間・場所などを使う。
+   話し手：M=男性 / W=女性 / N=ナレーション（nv で男女を指定） */
 const LI = [
-{id:"l1-01",part:1,L:[["W","Dad, I'm hungry."],["M","Dinner is almost ready."],["W","What are we having?"]],k:"Curry and rice.",d:["At seven o'clock.","In the kitchen."],ja:["お父さん、おなかがすいた。","夕食はもうすぐできるよ。","何を食べるの？"],e:"What are we having?（何を食べるの？）には、料理の名前で答えます。"},
-{id:"l1-02",part:1,L:[["M","Hi, Jane. Is that your new bag?"],["W","Yes. I bought it yesterday."],["M","Where did you buy it?"]],k:"At the shop near the station.",d:["Last Sunday.","It was five dollars."],ja:["やあ、ジェーン。それは新しいかばん？","ええ。昨日買ったの。","どこで買ったの？"],e:"Where（どこで）なので、場所を答えます。Last Sunday. は When への答えです。"},
+{id:"l1-01",part:1,L:[["W","Dad, I'm hungry."],["M","Dinner is almost ready."],["W","What are we having?"]],k:"Chicken and rice.",d:["At seven o'clock.","In the kitchen."],ja:["お父さん、おなかがすいた。","夕食はもうすぐできるよ。","何を食べるの？"],e:"What are we having?（何を食べるの？）には、料理の名前で答えます。時刻や場所の答えは、ほかの疑問詞への答え方です。"},
+{id:"l1-02",part:1,L:[["M","Hi, Jane. Is that your new bag?"],["W","Yes. I bought it yesterday."],["M","Where did you buy it?"]],k:"At the shop near the station.",d:["Last Sunday.","It was five dollars."],ja:["やあ、ジェーン。それは新しいかばん？","ええ。昨日買ったの。","どこで買ったの？"],e:"Where（どこで）なので、場所を答えます。Last Sunday. は When への答え、It was five dollars. は How much への答えです。"},
 {id:"l1-03",part:1,L:[["W","Hurry up, Ben. The bus is coming."],["M","Wait! I can't find my cap."],["W","It's on the table."]],k:"Oh, thanks.",d:["Yes, I am.","See you tomorrow."],ja:["急いで、ベン。バスが来るわよ。","待って！ぼうしが見つからないんだ。","テーブルの上にあるわよ。"],e:"ぼうしの場所を教えてもらったので、お礼を言います。"},
 {id:"l1-04",part:1,L:[["M","Excuse me. How much is this pen?"],["W","It's two hundred yen."],["M","OK. I'll take it."]],k:"Thank you very much.",d:["It's blue.","That's my pen."],ja:["すみません。このペンはいくらですか。","200円です。","わかりました。それをください。"],e:"I'll take it.（それを買います）と言われた店員は、お礼を言います。"},
 {id:"l1-05",part:1,L:[["W","Are you going to the festival tonight?"],["M","Yes. Do you want to come?"],["W","I'd love to. What time?"]],k:"Let's meet at six.",d:["It was fun.","I went there yesterday."],ja:["今夜のお祭りに行くの？","うん。一緒に来る？","ぜひ。何時に？"],e:"What time?（何時に）なので、会う時刻を答えます。これからの予定なので、過去の文は合いません。"},
-{id:"l1-06",part:1,L:[["M","Mom, can I go to Kevin's house?"],["W","Did you clean your room?"]],k:"Yes, I did it this morning.",d:["No, it's Kevin's.","At his house."],ja:["お母さん、ケビンの家に行ってもいい？","部屋のそうじはしたの？"],e:"Did you ～?（～したの？）には、Yes, I did. / No, I didn't. で答えるのが基本です。"},
-{id:"l1-07",part:1,L:[["W","Hello. This is Lisa. Can I speak to Mike?"],["M","Sorry, he's out now."]],k:"OK. I'll call again later.",d:["Yes, I'm Lisa.","He is fourteen."],ja:["もしもし。リサです。マイクはいますか。","ごめんね、今出かけているんだ。"],e:"電話の相手がいないときは、「あとでかけ直します」と言います。"},
+{id:"l1-06b",part:1,L:[["M","Mom, can I go to Kevin's house?"],["W","Did you clean your room?"],["M","Yes, I did it this morning."]],k:"OK. Have fun.",d:["It's next to the park.","No, it's Kevin's."],ja:["お母さん、ケビンの家に行ってもいい？","部屋のそうじはしたの？","うん、今朝やったよ。"],e:"そうじが終わっているので、母親は出かけることを許しています。Have fun.（楽しんでね）は、出かける人にかける言葉です。"},
+{id:"l1-07b",part:1,L:[["W","Hi, this is Lisa. Is Mike there?"],["M","Sorry, he's not home right now."],["W","When will he be back?"]],k:"Around five.",d:["He's my brother.","At the library."],ja:["もしもし、リサです。マイクはいますか。","ごめんね、今家にいないんだ。","いつもどってくるの？"],e:"When（いつ）なので、時刻で答えます。At the library. は Where への答えです。"},
 {id:"l1-08",part:1,L:[["M","I like your sweater."],["W","Thanks. My grandmother made it."],["M","Did she make it for your birthday?"]],k:"No, for Christmas.",d:["Yes, she's seventy.","It's very cold."],ja:["そのセーター、いいね。","ありがとう。おばあちゃんが作ってくれたの。","誕生日に作ってくれたの？"],e:"「誕生日に？」に No と答えて、本当はいつかを続けています。Yes, she's seventy. は年齢の話で合いません。"},
-{id:"l1-09",part:1,L:[["W","Let's go to the beach this weekend."],["M","Sounds good. Saturday or Sunday?"]],k:"Saturday is better for me.",d:["It's very hot.","I went there last year."],ja:["今週末、海に行こうよ。","いいね。土曜日と日曜日、どっちがいい？"],e:"A or B?（AとBどちら）とたずねられたら、どちらかを選んで答えます。"},
-{id:"l1-10",part:1,L:[["W","Excuse me. Where's the library?"],["M","Go straight and turn left at the corner."],["W","Is it far from here?"]],k:"No, it's only five minutes.",d:["Yes, I like books.","It's on Monday."],ja:["すみません。図書館はどこですか。","まっすぐ行って、角を左に曲がってください。","ここから遠いですか。"],e:"Is it far?（遠いですか）に No と答え、かかる時間を伝えています。Yes, I like books. は質問と合いません。"},
+{id:"l1-09b",part:1,L:[["W","Let's go to the beach this weekend."],["M","Sounds good."],["W","Is Saturday or Sunday better for you?"]],k:"Saturday is better.",d:["It's very hot.","I went there last year."],ja:["今週末、海に行こうよ。","いいね。","土曜日と日曜日、どっちがいい？"],e:"A or B?（AとBどちら）とたずねられたら、どちらかを選んで答えます。"},
+{id:"l1-10",part:1,L:[["W","Excuse me. Where's the library?"],["M","Go straight and turn left at the corner."],["W","Is it far from here?"]],k:"No, it's only five minutes away.",d:["Yes, I like books.","It's on Monday."],ja:["すみません。図書館はどこですか。","まっすぐ行って、角を左に曲がってください。","ここから遠いですか。"],e:"Is it far?（遠いですか）に No と答え、かかる時間を伝えています。Yes, I like books. は質問と合いません。"},
 {id:"l1-11",part:1,L:[["M","You play the guitar very well."],["W","Thank you. I practice every day."],["M","Who taught you?"]],k:"My brother did.",d:["In the music room.","For two years."],ja:["ギターがとても上手だね。","ありがとう。毎日練習しているの。","だれに教わったの？"],e:"Who（だれが）なので、人で答えます。did は taught（教えた）の代わりです。"},
-{id:"l1-12",part:1,L:[["W","It's raining. Did you bring your umbrella?"],["M","No, I forgot it."]],k:"You can use mine.",d:["It's sunny today.","I'm going home."],ja:["雨が降っているね。かさは持ってきた？","ううん、忘れちゃった。"],e:"かさを忘れた相手に、「私のを使っていいよ」と申し出る応答が自然です。"},
+{id:"l1-12b",part:1,L:[["W","Look. It's raining."],["M","Oh no. I didn't bring my umbrella."],["W","You can use mine."]],k:"Thanks a lot.",d:["It's sunny today.","I'm sorry to hear that."],ja:["見て。雨が降っているわ。","しまった。かさを持ってこなかったよ。","私のを使っていいわよ。"],e:"かさを貸してもらえるので、お礼を言います。I'm sorry to hear that. は、悪い知らせを聞いたときの言葉です。"},
 
-{id:"l2-01",part:2,L:[["M","Mom, where's my soccer ball?"],["W","I saw it in the garden this morning."],["M","Thanks. I'll get it now."]],q:"Where was the boy's soccer ball?",qja:"男の子のサッカーボールはどこにありましたか。",k:"In the garden.",d:["In his room.","At school.","In the car."],clue:"I saw it in the garden this morning.",ja:["お母さん、ぼくのサッカーボールはどこ？","今朝、庭で見たわよ。","ありがとう。今取ってくるよ。"],e:"お母さんが「今朝、庭で見た」と言っています。"},
+{id:"l2-01b",part:2,L:[["M","Mom, where's my soccer ball?"],["W","I saw it in the backyard this morning."],["M","It's not there now."],["W","Then look in the garage."]],q:"Where will the boy look for his soccer ball?",qja:"男の子はどこでサッカーボールをさがしますか。",k:"In the garage.",d:["In the backyard.","In his room.","At school."],clue:"Then look in the garage.",ja:["お母さん、ぼくのサッカーボールはどこ？","今朝、裏庭で見たわよ。","今はそこにないんだ。","それならガレージを見てごらん。"],e:"裏庭（backyard）にはもうないので、ガレージをさがします。最初に出てきた場所を選ばないようにします。"},
 {id:"l2-02",part:2,L:[["W","Did you go to the movies yesterday, Tom?"],["M","No, I stayed home. I had a bad cold."],["W","That's too bad. Are you OK now?"],["M","Yes, much better."]],q:"Why did Tom stay home yesterday?",qja:"トムはなぜ昨日家にいたのですか。",k:"He was sick.",d:["He had homework.","It was raining.","He saw a movie on TV."],clue:"I had a bad cold.",ja:["昨日は映画に行ったの、トム？","ううん、家にいたよ。ひどいかぜをひいていたんだ。","それはたいへんだったね。今はだいじょうぶ？","うん、ずっとよくなったよ。"],e:"I had a bad cold.（ひどいかぜをひいていた）が、選択肢では He was sick.（病気だった）と言いかえられています。"},
-{id:"l2-03",part:2,L:[["M","How many people are coming to the party?"],["W","Eight. And my cousin will come, too."],["M","So, nine people. OK."]],q:"How many people will come to the party?",qja:"パーティーには何人来ますか。",k:"Nine.",d:["Eight.","Seven.","Ten."],clue:"So, nine people.",ja:["パーティーには何人来るの？","8人よ。それから、いとこも来るわ。","じゃあ9人だね。わかった。"],e:"8人にいとこが加わって9人です。最初に聞こえた数字だけで答えないようにします。"},
+{id:"l2-03b",part:2,L:[["M","How many people are coming to the party?"],["W","Eight. And my cousin will come, too."],["M","So, nine people?"],["W","Right. Let's buy ten cups."]],q:"How many people will come to the party?",qja:"パーティーには何人来ますか。",k:"Nine.",d:["Eight.","Ten.","Seven."],clue:"So, nine people?",ja:["パーティーには何人来るの？","8人よ。それから、いとこも来るわ。","じゃあ、9人だね？","そう。カップを10個買いましょう。"],e:"8人にいとこが加わって9人です。10はカップの数です。"},
 {id:"l2-04",part:2,L:[["W","Excuse me. When does the museum open?"],["M","At nine thirty, but it opens at nine on Saturdays."],["W","Today's Saturday, right?"],["M","Yes."]],q:"What time does the museum open today?",qja:"博物館は今日何時に開きますか。",k:"At nine.",d:["At nine thirty.","At ten.","At ten thirty."],clue:"it opens at nine on Saturdays",ja:["すみません。博物館は何時に開きますか。","9時30分ですが、土曜日は9時に開きます。","今日は土曜日ですよね。","そうです。"],e:"ふだんは9時30分ですが、今日は土曜日なので9時に開きます。"},
-{id:"l2-05",part:2,L:[["M","What did you do last weekend, Amy?"],["W","I went shopping with my sister. I bought a new dress."],["M","Nice."]],q:"What did Amy buy last weekend?",qja:"エイミーは先週末に何を買いましたか。",k:"A dress.",d:["Shoes.","A bag.","A hat."],clue:"I bought a new dress.",ja:["先週末は何をしたの、エイミー？","姉（妹）と買い物に行ったの。新しいドレスを買ったわ。","いいね。"],e:"I bought a new dress. と言っています。"},
-{id:"l2-06",part:2,L:[["W","Are you going to take the bus to the stadium?"],["M","No. My father will take me there by car."]],q:"How will the boy go to the stadium?",qja:"男の子はどうやってスタジアムへ行きますか。",k:"By car.",d:["By bus.","By bike.","On foot."],clue:"My father will take me there by car.",ja:["スタジアムまでバスで行くの？","ううん。父が車で連れていってくれるんだ。"],e:"バスかと聞かれて No と答え、「父が車で連れていってくれる」と言っています。"},
-{id:"l2-07",part:2,L:[["M","Is this your notebook, Yumi?"],["W","No, it's Kana's. Mine is red."]],q:"Whose notebook is it?",qja:"それはだれのノートですか。",k:"Kana's.",d:["Yumi's.","The boy's.","The teacher's."],clue:"it's Kana's",ja:["これはきみのノート、ユミ？","ううん、カナのよ。私のは赤いの。"],e:"ユミは「カナのものだ」と答えています。"},
-{id:"l2-08",part:2,L:[["W","Dad, can you help me with my science homework?"],["M","Sure, but I'm cooking now. After dinner, OK?"],["W","OK."]],q:"When will the father help the girl?",qja:"父親はいつ女の子を手伝いますか。",k:"After dinner.",d:["Now.","Before dinner.","Tomorrow morning."],clue:"After dinner, OK?",ja:["お父さん、理科の宿題を手伝ってくれる？","いいよ、でも今は料理中なんだ。夕食のあとでいい？","わかった。"],e:"今は料理中なので、夕食のあとに手伝います。"},
-{id:"l2-09",part:2,L:[["M","I want to buy a present for my mother."],["W","How about some flowers?"],["M","Good idea. She loves roses."]],q:"What will the boy buy?",qja:"男の子は何を買いますか。",k:"Some flowers.",d:["A cake.","A book.","A cup."],clue:"How about some flowers?",ja:["お母さんにプレゼントを買いたいんだ。","お花はどう？","いい考えだね。母はバラが大好きなんだ。"],e:"花をすすめられて Good idea. と答えています。roses（バラ）も花の一つです。"},
+{id:"l2-05b",part:2,L:[["M","What did you do last weekend, Amy?"],["W","I went shopping with my sister."],["M","Did you buy anything?"],["W","Yes, a new dress. My sister got some shoes."]],q:"What did Amy buy?",qja:"エイミーは何を買いましたか。",k:"A dress.",d:["Some shoes.","A bag.","A hat."],clue:"Yes, a new dress.",ja:["先週末は何をしたの、エイミー？","姉（妹）と買い物に行ったの。","何か買った？","ええ、新しいドレスよ。姉（妹）はくつを買ったわ。"],e:"エイミーはドレスを買いました。くつを買ったのは姉（妹）です。"},
+{id:"l2-06b",part:2,L:[["W","Are you going to take the bus to the stadium?"],["M","No. My dad's going to drive me there."],["W","What time does the game start?"],["M","At two."]],q:"How will the boy go to the stadium?",qja:"男の子はどうやってスタジアムへ行きますか。",k:"By car.",d:["By bus.","By bike.","On foot."],clue:"My dad's going to drive me there.",ja:["スタジアムまでバスで行くの？","ううん。父さんが車で送ってくれるんだ。","試合は何時に始まるの？","2時だよ。"],e:"drive me there（車で送る）が、選択肢では By car.（車で）と言いかえられています。バスは女の子が最初にたずねたものです。"},
+{id:"l2-07b",part:2,L:[["M","Is this your notebook, Yumi?"],["W","No, it's Kana's."],["M","Where's yours?"],["W","It's in my bag. Mine is red."]],q:"Whose notebook is it?",qja:"それはだれのノートですか。",k:"Kana's.",d:["Yumi's.","The boy's.","The teacher's."],clue:"it's Kana's",ja:["これはきみのノート、ユミ？","ううん、カナのよ。","きみのはどこ？","かばんの中よ。私のは赤いの。"],e:"ユミは「カナのものだ」と答えています。"},
+{id:"l2-08b",part:2,L:[["W","Dad, can you help me with my science homework?"],["M","Sure, but I'm cooking now."],["W","Can you help me after dinner?"],["M","Of course."]],q:"When will the father help the girl?",qja:"父親はいつ女の子を手伝いますか。",k:"After dinner.",d:["Now.","Before dinner.","Tomorrow morning."],clue:"Can you help me after dinner?",ja:["お父さん、理科の宿題を手伝ってくれる？","いいよ、でも今は料理中なんだ。","夕食のあとで手伝ってくれる？","もちろん。"],e:"今は料理中なので、夕食のあとに手伝います。"},
+{id:"l2-09b",part:2,L:[["M","I want to buy a present for my mother."],["W","How about a cake?"],["M","She doesn't like sweet things. She loves flowers."],["W","Then let's go to the flower shop."]],q:"What will the boy buy for his mother?",qja:"男の子は母親に何を買いますか。",k:"Some flowers.",d:["A cake.","A book.","A cup."],clue:"She loves flowers.",ja:["お母さんにプレゼントを買いたいんだ。","ケーキはどう？","母は甘いものが好きじゃないんだ。花が大好きなんだよ。","それなら花屋さんに行きましょう。"],e:"ケーキをすすめられましたが、母親は甘いものが好きではありません。花を買います。"},
 {id:"l2-10",part:2,L:[["W","How was your trip to Hokkaido, Kenji?"],["M","It was cold, but I enjoyed skiing."],["W","Did you go with your family?"],["M","No, with my friends from school."]],q:"Who did Kenji go to Hokkaido with?",qja:"ケンジはだれと北海道に行きましたか。",k:"His friends.",d:["His family.","His teacher.","His brother."],clue:"with my friends from school",ja:["北海道旅行はどうだった、ケンジ？","寒かったけど、スキーを楽しんだよ。","家族と行ったの？","ううん、学校の友だちとだよ。"],e:"家族と？と聞かれて No と答え、「学校の友だちと」と言っています。"},
-{id:"l2-11",part:2,L:[["M","Hurry up, Meg. The movie starts at four."],["W","It's three thirty now. We have thirty minutes."]],q:"What time does the movie start?",qja:"映画は何時に始まりますか。",k:"At four.",d:["At three thirty.","At three.","At four thirty."],clue:"The movie starts at four.",ja:["急いで、メグ。映画は4時に始まるよ。","今は3時30分よ。あと30分あるわ。"],e:"3時30分は今の時刻です。映画は4時に始まります。"},
-{id:"l2-12",part:2,L:[["W","Do you have any pets, Josh?"],["M","Yes. I have two dogs and a cat."],["W","Wow. I have only one rabbit."]],q:"How many dogs does Josh have?",qja:"ジョシュは犬を何びき飼っていますか。",k:"Two.",d:["One.","Three.","Four."],clue:"I have two dogs and a cat.",ja:["何かペットを飼っている、ジョシュ？","うん。犬を2ひきとねこを1ぴき飼っているよ。","わあ。私はうさぎを1ぴきだけよ。"],e:"犬は2ひきです。ねこやうさぎの数とまちがえないようにします。"},
+{id:"l2-11b",part:2,L:[["M","Hurry up, Meg. The movie starts at four."],["W","What time is it now?"],["M","It's three thirty."],["W","OK. Let's take a taxi."]],q:"What time does the movie start?",qja:"映画は何時に始まりますか。",k:"At four.",d:["At three thirty.","At three.","At four thirty."],clue:"The movie starts at four.",ja:["急いで、メグ。映画は4時に始まるよ。","今何時？","3時30分だよ。","わかった。タクシーに乗りましょう。"],e:"3時30分は今の時刻です。映画は4時に始まります。"},
+{id:"l2-12b",part:2,L:[["W","Do you have any pets, Josh?"],["M","Yes. I have two dogs and a cat."],["W","Wow. I have one rabbit."],["M","Can I see it someday?"]],q:"What are they talking about?",qja:"2人は何について話していますか。",k:"Their pets.",d:["Their families.","A trip to the zoo.","A pet shop."],clue:"Do you have any pets, Josh?",ja:["何かペットを飼っている、ジョシュ？","うん。犬を2ひきとねこを1ぴき飼っているよ。","わあ。私はうさぎを1ぴき飼っているの。","いつか見に行ってもいい？"],e:"What are they talking about? は、対話全体の話題をたずねる質問です。2人は自分のペットの話をしています。"},
 
-{id:"l3-01",part:3,L:[["N","I usually walk to school. But it was raining this morning, so my mother took me to school by car."]],q:"How did the speaker go to school this morning?",qja:"話し手は今朝、どうやって学校へ行きましたか。",k:"By car.",d:["On foot.","By bus.","By bike."],clue:"my mother took me to school by car",ja:["ふだんは歩いて学校に行きます。でも今朝は雨だったので、母が車で学校に送ってくれました。"],e:"ふだんは歩きですが、今朝は雨で車でした。usually（ふだんは）と this morning（今朝）を区別します。"},
-{id:"l3-02",part:3,L:[["N","Last Sunday, I went to the zoo with my family. I wanted to see the pandas, but they were sleeping. So we watched the monkeys for a long time."]],q:"What did the speaker's family watch for a long time?",qja:"話し手の家族は何を長い時間見ていましたか。",k:"The monkeys.",d:["The pandas.","The lions.","The birds."],clue:"we watched the monkeys for a long time",ja:["この前の日曜日、家族と動物園に行きました。パンダを見たかったのですが、ねていました。それで、サルを長い時間見ました。"],e:"パンダはねていたので、サルを見ました。"},
-{id:"l3-03",part:3,L:[["N","My brother is a high school student. He likes cooking very much. Every Sunday, he makes lunch for our family."]],q:"What does the speaker's brother do every Sunday?",qja:"話し手の兄は毎週日曜日に何をしますか。",k:"He makes lunch.",d:["He goes to school.","He eats at a restaurant.","He plays sports."],clue:"Every Sunday, he makes lunch for our family.",ja:["私の兄は高校生です。料理が大好きです。毎週日曜日に、家族のために昼食を作ります。"],e:"Every Sunday のあとに、兄がすることが言われています。"},
-{id:"l3-04",part:3,L:[["N","Attention, shoppers. Today, all T-shirts are half price. The sale will end at six p.m. Thank you."]],q:"When will the sale end?",qja:"セールはいつ終わりますか。",k:"At six p.m.",d:["At five p.m.","At seven p.m.","Tomorrow."],clue:"The sale will end at six p.m.",ja:["お客さまにお知らせします。本日、Tシャツはすべて半額です。セールは午後6時に終わります。ありがとうございました。"],e:"店内放送です。セールは午後6時に終わります。"},
-{id:"l3-05",part:3,L:[["N","I have a test next Monday. I studied for three hours yesterday, and I'm going to study for two hours today."]],q:"How long will the speaker study today?",qja:"話し手は今日、どのくらい勉強しますか。",k:"For two hours.",d:["For three hours.","For one hour.","For five hours."],clue:"I'm going to study for two hours today",ja:["今度の月曜日にテストがあります。昨日は3時間勉強しました。今日は2時間勉強するつもりです。"],e:"3時間は昨日です。今日（today）は2時間です。"},
-{id:"l3-06",part:3,L:[["N","Mike is from Australia. He came to Japan two years ago. Now he teaches English at a junior high school in Nagoya."]],q:"What does Mike do?",qja:"マイクは何をしていますか（仕事は何ですか）。",k:"He teaches English.",d:["He studies Japanese.","He works at a hospital.","He is a student."],clue:"he teaches English at a junior high school",ja:["マイクはオーストラリア出身です。2年前に日本に来ました。今は名古屋の中学校で英語を教えています。"],e:"What does ～ do? は「仕事は何か」をたずねる質問です。マイクは英語を教えています。"},
-{id:"l3-07",part:3,L:[["N","Yesterday was my sister's birthday. I gave her a cake, and my father gave her a watch. She was very happy."]],q:"What did the speaker give to the sister?",qja:"話し手は姉（妹）に何をあげましたか。",k:"A cake.",d:["A watch.","A book.","Flowers."],clue:"I gave her a cake",ja:["昨日は姉（妹）の誕生日でした。私はケーキをあげて、父はうで時計をあげました。姉（妹）はとても喜びました。"],e:"話し手（I）はケーキ、父はうで時計をあげました。だれが何をあげたかを分けて聞きます。"},
-{id:"l3-08",part:3,L:[["N","Good morning, everyone. Today's P.E. class will be in the gym because it's raining. Please change your clothes and come to the gym by ten thirty."]],q:"Where will the P.E. class be today?",qja:"今日の体育の授業はどこで行われますか。",k:"In the gym.",d:["On the field.","In the classroom.","At the pool."],clue:"Today's P.E. class will be in the gym",ja:["みなさん、おはようございます。今日の体育は、雨なので体育館で行います。着がえて、10時30分までに体育館に来てください。"],e:"雨なので、体育館（gym）で行います。"},
-{id:"l3-09",part:3,L:[["N","I like reading books. I usually go to the city library on Saturdays. Last Saturday, I borrowed three books about animals."]],q:"What did the speaker do last Saturday?",qja:"話し手はこの前の土曜日に何をしましたか。",k:"Borrowed some books.",d:["Bought some books.","Went to the zoo.","Read a book at home."],clue:"I borrowed three books about animals",ja:["私は本を読むのが好きです。ふだん、土曜日には市立図書館に行きます。この前の土曜日は、動物についての本を3冊借りました。"],e:"borrowed（借りた）です。bought（買った）とまちがえないようにします。"},
-{id:"l3-10",part:3,L:[["N","Emma got up late this morning. She didn't have time to eat breakfast. She was very hungry before lunch."]],q:"Why was Emma hungry?",qja:"エマはなぜおなかがすいていたのですか。",k:"She didn't eat breakfast.",d:["She didn't eat lunch.","She got up early.","She played tennis."],clue:"She didn't have time to eat breakfast.",ja:["エマは今朝ねぼうしました。朝食を食べる時間がありませんでした。昼食の前、とてもおなかがすいていました。"],e:"「朝食を食べる時間がなかった」が、選択肢では「朝食を食べなかった」と言いかえられています。"},
-{id:"l3-11",part:3,L:[["N","My family is going to go camping this weekend. My father will cook dinner, and I'll help him. My mother will bring the tent."]],q:"Who will bring the tent?",qja:"だれがテントを持っていきますか。",k:"The speaker's mother.",d:["The speaker's father.","The speaker.","The speaker's brother."],clue:"My mother will bring the tent.",ja:["家族で今週末キャンプに行きます。父が夕食を作り、私はそれを手伝います。母がテントを持っていきます。"],e:"テントを持っていくのは母です。父と話し手は夕食の係です。"},
-{id:"l3-12",part:3,L:[["N","Hello, class. Tomorrow we will go to the science museum. We will meet at the station at eight forty-five. Don't be late."]],q:"Where will the students meet tomorrow?",qja:"生徒たちは明日どこで集まりますか。",k:"At the station.",d:["At the museum.","At school.","At the park."],clue:"We will meet at the station",ja:["みなさん、こんにちは。明日は科学博物館に行きます。8時45分に駅に集合です。遅れないようにしましょう。"],e:"行き先は博物館ですが、集まる場所は駅です。"}
+{id:"l3-01b",part:3,nv:"W",L:[["N","I usually walk to school. But it was raining this morning, so my mom drove me. After school, I came home by bus with my friend."]],q:"How did the girl go to school this morning?",qja:"女の子は今朝、どうやって学校へ行きましたか。",k:"By car.",d:["On foot.","By bus.","By bike."],clue:"so my mom drove me",ja:["ふだんは歩いて学校に行きます。でも今朝は雨だったので、母が車で送ってくれました。放課後は、友だちとバスで帰ってきました。"],e:"my mom drove me（母が車で送ってくれた）が By car. と言いかえられています。歩きはふだん、バスは帰り道です。"},
+{id:"l3-02",part:3,nv:"M",L:[["N","Last Sunday, I went to the zoo with my family. I wanted to see the pandas, but they were sleeping. So we watched the monkeys for a long time."]],q:"What did the boy's family watch for a long time?",qja:"男の子の家族は何を長い時間見ていましたか。",k:"The monkeys.",d:["The pandas.","The lions.","The birds."],clue:"we watched the monkeys for a long time",ja:["この前の日曜日、家族と動物園に行きました。パンダを見たかったのですが、ねていました。それで、サルを長い時間見ました。"],e:"パンダはねていたので、サルを見ました。"},
+{id:"l3-03",part:3,nv:"W",L:[["N","My brother is a high school student. He likes cooking very much. Every Sunday, he makes lunch for our family, and I help him."]],q:"What does the girl's brother do every Sunday?",qja:"女の子の兄は毎週日曜日に何をしますか。",k:"He makes lunch.",d:["He goes to school.","He eats at a restaurant.","He plays sports."],clue:"Every Sunday, he makes lunch for our family",ja:["私の兄は高校生です。料理が大好きです。毎週日曜日に、兄が家族のために昼食を作り、私はそれを手伝います。"],e:"Every Sunday のあとに、兄がすることが言われています。"},
+{id:"l3-04",part:3,nv:"M",L:[["N","Attention, shoppers. All T-shirts and caps are half price today. The sale ends at six p.m. Thank you for shopping with us."]],q:"When will the sale end?",qja:"セールはいつ終わりますか。",k:"At six p.m.",d:["At five p.m.","At seven p.m.","Tomorrow."],clue:"The sale ends at six p.m.",ja:["お客さまにお知らせします。本日、Tシャツとぼうしはすべて半額です。セールは午後6時までです。ご来店ありがとうございます。"],e:"店内放送です。セールは午後6時に終わります。"},
+{id:"l3-05b",part:3,nv:"M",L:[["N","I have a math test next Monday. I studied for three hours yesterday. Today, I'm going to study for two hours with my friend."]],q:"How long will the boy study today?",qja:"男の子は今日、どのくらい勉強しますか。",k:"For two hours.",d:["For three hours.","For one hour.","For five hours."],clue:"Today, I'm going to study for two hours",ja:["今度の月曜日に数学のテストがあります。昨日は3時間勉強しました。今日は友だちと2時間勉強するつもりです。"],e:"3時間は昨日です。今日（today）は2時間です。"},
+{id:"l3-06",part:3,nv:"W",L:[["N","Mike is from Australia. He came to Japan two years ago. Now he teaches English at a junior high school in Nagoya."]],q:"What does Mike do?",qja:"マイクは何をしていますか（仕事は何ですか）。",k:"He teaches English.",d:["He studies Japanese.","He works at a hospital.","He is a student."],clue:"he teaches English at a junior high school",ja:["マイクはオーストラリア出身です。2年前に日本に来ました。今は名古屋の中学校で英語を教えています。"],e:"What does ～ do? は「仕事は何か」をたずねる質問です。マイクは英語を教えています。"},
+{id:"l3-07",part:3,nv:"W",L:[["N","Yesterday was my sister's birthday. I gave her a cake, and my father gave her a watch. She was very happy and said thank you to us."]],q:"What did the girl give her sister?",qja:"女の子は姉（妹）に何をあげましたか。",k:"A cake.",d:["A watch.","A book.","Some flowers."],clue:"I gave her a cake",ja:["昨日は姉（妹）の誕生日でした。私はケーキをあげて、父はうで時計をあげました。姉（妹）はとても喜んで、私たちにお礼を言いました。"],e:"女の子（I）はケーキ、父はうで時計をあげました。だれが何をあげたかを分けて聞きます。"},
+{id:"l3-08",part:3,nv:"M",L:[["N","Good morning, everyone. Today's P.E. class will be in the gym because it's raining. Please change into your gym clothes and come to the gym by ten thirty."]],q:"Where will the P.E. class be today?",qja:"今日の体育の授業はどこで行われますか。",k:"In the gym.",d:["On the field.","In the classroom.","At the pool."],clue:"Today's P.E. class will be in the gym",ja:["みなさん、おはようございます。今日の体育は、雨なので体育館で行います。体操服に着がえて、10時30分までに体育館に来てください。"],e:"雨なので、体育館（gym）で行います。"},
+{id:"l3-09",part:3,nv:"W",L:[["N","I like reading books, so I usually go to the city library on Saturdays. Last Saturday, I borrowed three books about animals there."]],q:"What did the girl do last Saturday?",qja:"女の子はこの前の土曜日に何をしましたか。",k:"She borrowed some books.",d:["She bought some books.","She went to the zoo.","She read a book at home."],clue:"I borrowed three books about animals",ja:["私は本を読むのが好きなので、ふだん土曜日には市立図書館に行きます。この前の土曜日は、そこで動物についての本を3冊借りました。"],e:"borrowed（借りた）です。bought（買った）とまちがえないようにします。"},
+{id:"l3-10",part:3,nv:"M",L:[["N","Emma got up late this morning, so she didn't have time to eat breakfast. She was very hungry before lunch, so she ate a big lunch."]],q:"Why was Emma hungry?",qja:"エマはなぜおなかがすいていたのですか。",k:"She didn't eat breakfast.",d:["She didn't eat lunch.","She got up early.","She played tennis."],clue:"she didn't have time to eat breakfast",ja:["エマは今朝ねぼうしたので、朝食を食べる時間がありませんでした。昼食の前にはとてもおなかがすいていたので、たくさん昼食を食べました。"],e:"「朝食を食べる時間がなかった」が、選択肢では「朝食を食べなかった」と言いかえられています。"},
+{id:"l3-11",part:3,nv:"M",L:[["N","My family is going to go camping this weekend. My father will cook dinner, and I'll help him. My mother will bring the tent."]],q:"Who will bring the tent?",qja:"だれがテントを持っていきますか。",k:"The boy's mother.",d:["The boy's father.","The boy.","The boy's brother."],clue:"My mother will bring the tent.",ja:["家族で今週末キャンプに行きます。父が夕食を作り、ぼくはそれを手伝います。母がテントを持っていきます。"],e:"テントを持っていくのは母です。父と男の子は夕食の係です。"},
+{id:"l3-12",part:3,nv:"W",L:[["N","Hello, class. Tomorrow we will go to the science museum. We will meet at the station at eight forty-five. Don't be late."]],q:"Where will the students meet tomorrow?",qja:"生徒たちは明日どこで集まりますか。",k:"At the station.",d:["At the museum.","At school.","At the park."],clue:"We will meet at the station",ja:["みなさん、こんにちは。明日は科学博物館に行きます。8時45分に駅に集合です。遅れないようにしましょう。"],e:"行き先は博物館ですが、集まる場所は駅です。"}
 ];
+
 
 
 /* ========== 大問2〜4・リスニングの進行 ========== */
@@ -1248,6 +1270,27 @@ function weakFirst(arr, p, idf){
 }
 const listenMode = () => (S.settings.lm==="listen" && canSpeak()) ? "listen" : "read";
 
+/* ---------- 時間の表し方（パートごと） ---------- */
+const TUNIT = {
+  p1:{lab:"1問あたり", hint:"下段＝1問あたりの平均秒数"},
+  p2:{lab:"1問あたり", hint:"下段＝1問あたりの平均秒数"},
+  p3:{lab:"1問あたり", hint:"下段＝1問あたりの平均秒数"},
+  p4:{lab:"長文1題あたり", hint:"下段＝長文1題あたりの平均時間（分:秒）。本文を読み始めてから、最後の設問に答えるまでです"},
+  li:{lab:"放送が終わってから答えるまで", hint:"下段＝放送が終わってから答えるまでの平均秒数（本番の解答時間は10秒）。「聞いて解く」のときだけ計ります"}
+};
+function fmtT(part, ms, n){
+  if(!(n>0) || !(ms>=0)) return "－";
+  const a = ms/n/1000;
+  if(part==="p4"){ const t = Math.round(a); return Math.floor(t/60)+":"+String(t%60).padStart(2,"0"); }
+  return a.toFixed(1);
+}
+function pTimeLine(part, ms, n, long){
+  const u = TUNIT[part]; if(!u) return "";
+  if(!(n>0)) return part==="li" ? "放送後の解答時間は、「聞いて解く」で放送を最後まで聞いたときに計ります" : "";
+  const v = fmtT(part, ms, n);
+  return u.lab+" 平均 "+(part==="p4" ? v.replace(":","分")+"秒" : v+"秒");
+}
+
 /* ---------- トップのパート一覧 ---------- */
 function renderParts(){
   ["p1","p2","p3","p4","li"].forEach(p=>{
@@ -1262,12 +1305,31 @@ function renderParts(){
 }
 
 /* ---------- 記録 ---------- */
-function pRecord(part, id, ok, ms, daily){
-  if(daily){
-    const k = today();
-    const r = S.daily[k] || [0,0,0];
-    S.daily[k] = [r[0]+1, r[1]+(ok?1:0), (r[2]||0)+ms];
-  }
+/* 日ごとの記録：S.daily は全体（正答率用）、S.pdaily はパートごと。
+   S.pdaily["日付"][パート] = [解答数, 正解数, 計った時間の合計ミリ秒, 時間を計った数]
+   時間を計る単位は、大問1〜3は1問、大問4は長文1題、リスニングは「放送が終わってから答えるまで」 */
+function pBucket(part){
+  const k = today();
+  if(!S.pdaily) S.pdaily = {};
+  if(!S.pdaily[k]) S.pdaily[k] = {};
+  if(!S.pdaily[k][part]) S.pdaily[k][part] = [0,0,0,0];
+  return S.pdaily[k][part];
+}
+function pruneDays(){
+  const lim = shiftDay(-60);
+  Object.keys(S.daily||{}).forEach(d=>{ if(d < lim) delete S.daily[d]; });
+  Object.keys(S.pdaily||{}).forEach(d=>{ if(d < lim) delete S.pdaily[d]; });
+}
+function pAddTime(part, ms){
+  const b = pBucket(part); b[2] += ms; b[3] += 1;
+  if(PX){ PX.tms = (PX.tms||0) + ms; PX.ttn = (PX.ttn||0) + 1; }
+}
+function pRecord(part, id, ok, tms){
+  const k = today();
+  const r = S.daily[k] || [0,0,0];
+  S.daily[k] = [r[0]+1, r[1]+(ok?1:0), r[2]||0];
+  const b = pBucket(part); b[0] += 1; b[1] += ok?1:0;
+  if(tms !== null && tms !== undefined) pAddTime(part, tms);
   if(!S.parts) S.parts = {};
   const ps = S.parts[part] || [0,0];
   S.parts[part] = [ps[0]+1, ps[1]+(ok?1:0)];
@@ -1275,6 +1337,7 @@ function pRecord(part, id, ok, ms, daily){
   const wk = part+":"+id;
   if(ok){ if(S.pweak[wk]){ S.pweak[wk]--; if(S.pweak[wk]<=0) delete S.pweak[wk]; } }
   else S.pweak[wk] = (S.pweak[wk]||0)+1;
+  pruneDays();
   saveData(S);
 }
 
@@ -1300,6 +1363,16 @@ function pSetup(part){
   }else if(part==="li"){
     field("範囲", LPS, "lp", "第1部は対話の応答（選択肢3つ）、第2部は対話の内容、第3部は短い英文の内容についての問題です。");
     field("問題数", PNS, "pn");
+    if(canSpeak()){
+      field("読み上げの速さ", LWS, "lw", "英検4級の放送は、1分間に約100語の速さです（第3部は25語ほどの英文を約15秒で読みます）。「本番に近い」がおすすめです。速さは声ごとに実際の読み上げ時間を測って合わせるので、最初の数問で目標に近づきます。");
+      const vt = document.createElement("div"); vt.className = "field";
+      vt.innerHTML = '<span>声</span><p class="hint" id="voiceInfo"></p>'+
+        '<p class="playrow"><button type="button" class="say" data-act="li-test">🔊 声と速さを確かめる</button> <span class="hint" id="voiceTest"></span></p>'+
+        '<details class="jad"><summary>声をもっと自然にするには（iPhone・iPad）</summary>'+
+        '<p>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」→「英語」を開き、英語（アメリカ）の女性の声（Ava など）と男性の声（Evan・Nathan・Tom など）で、名前に「拡張」または「プレミアム」と付いたものをダウンロードします。Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
+      body.appendChild(vt);
+      pickVoices(); voiceInfo();
+    }
     field("解き方", LMS, "lm", canSpeak()
       ? "「聞いて解く」では、本番と同じく英文を見ずに聞いて答えます。第1部は選択肢も放送で聞きます。本番では2回放送されるので、2回まで聞くのがおすすめです。"
       : "この端末（またはブラウザ）は読み上げに対応していないため、文字で読んで解きます。");
@@ -1341,13 +1414,14 @@ function pUpdateStart(){
   else b.textContent = "はじめる（"+list.length+"問）";
 }
 function pOnSetting(key){
+  if(key==="gtab"){ renderWeek(); return; }
   if($id("psetup").classList.contains("on")) pUpdateStart();
 }
 
 /* ---------- 出題 ---------- */
 function pStart(list){
   stopSpeech();
-  PX.list = list; PX.i = 0; PX.ok = 0; PX.done = 0; PX.wrong = []; PX.t0 = Date.now();
+  PX.list = list; PX.i = 0; PX.ok = 0; PX.done = 0; PX.wrong = []; PX.t0 = Date.now(); PX.tms = 0; PX.ttn = 0; PX.setRun = null;
   show("pquiz");
   pRender();
 }
@@ -1397,9 +1471,9 @@ function dlgHTML(L, opt){
   }).join("")+'</div>';
 }
 function pRender(){
-  stopSpeech();
+  stopSeq();
   const it = PX.list[PX.i];
-  PX.stage = "ask"; PX.qStart = Date.now(); PX.plays = 0;
+  PX.stage = "ask"; PX.qStart = Date.now(); PX.plays = 0; PX.playing = false; PX.audioEnd = 0;
   $id("pAns").innerHTML = "";
   const p = PX.part;
   if(p==="p2") renderP2(it);
@@ -1422,7 +1496,7 @@ function renderP2(it){
 }
 function answerP2(i){
   const it = PX.list[PX.i], ok = PX.ch[i]===it.k;
-  pFinishQ(ok, it.id, true);
+  pFinishQ(ok, it.id);
   lockChoices(PX.ch, it.k, i);
   $id("pCard").insertAdjacentHTML("beforeend", markSvg(ok));
   $id("pAns").innerHTML = '<div class="answer">'+headHTML(ok)+
@@ -1487,12 +1561,12 @@ function answerP3(pick){
   let ok;
   if(PX.p3m==="exam"){
     ok = PX.ch[pick]===PX.key;
-    pFinishQ(ok, it.id, true);
+    pFinishQ(ok, it.id);
     const labels = PX.ch.map(k=>{ const [a,b]=k.split("-"); return CIRC[a]+" ― "+CIRC[b]; });
     lockChoices(labels, labels[PX.ch.indexOf(PX.key)], pick);
   }else{
     ok = PX.placed.map(ci=>PX.ord[ci]).join()==="0,1,2,3,4";
-    pFinishQ(ok, it.id, true);
+    pFinishQ(ok, it.id);
     drawP3(it, true);
   }
   $id("pCard").insertAdjacentHTML("beforeend", markSvg(ok));
@@ -1517,6 +1591,7 @@ function passageHTML(set, clue){
   }).join("")+'</div>';
 }
 function renderP4(it){
+  if(PX.i===0 || PX.list[PX.i-1].set!==it.set) PX.setRun = {id:it.set.id, t:Date.now(), n:0};
   pHeader(R4KIND[it.set.kind]+"　No."+(it.qi+1)+"（"+(PX.i+1)+" / "+PX.list.length+"）");
   PX.ch = shuffle([it.q.k].concat(it.q.d));
   $id("pPass").innerHTML = '<p class="qtype">'+R4KIND[it.set.kind]+'　本文を読んで答えましょう</p>'+passageHTML(it.set);
@@ -1526,7 +1601,11 @@ function renderP4(it){
 }
 function answerP4(i){
   const it = PX.list[PX.i], ok = PX.ch[i]===it.q.k;
-  pFinishQ(ok, it.q.id, true);
+  pFinishQ(ok, it.q.id, null);
+  if(PX.setRun && PX.setRun.id===it.set.id){
+    PX.setRun.n++;
+    if(PX.setRun.n === it.set.qs.length){ pAddTime("p4", Math.min(Date.now()-PX.setRun.t, 900000)); saveData(S); }
+  }
   lockChoices(PX.ch, it.q.k, i);
   $id("pCard").insertAdjacentHTML("beforeend", markSvg(ok));
   $id("pPass").innerHTML = '<p class="qtype">'+R4KIND[it.set.kind]+'　<mark class="clue">色の付いた部分</mark>が答えの根拠です</p>'+passageHTML(it.set, it.q.clue);
@@ -1539,36 +1618,149 @@ function answerP4(i){
 }
 
 /* --- リスニング --- */
-function liSeq(it, withChoices){
-  const pitch = s => s==="W" ? 1.25 : (s==="M" ? 0.85 : 1);
-  const seq = it.L.map(l=>({t:l[1], p:pitch(l[0]), gap:450}));
-  if(it.part===1){
-    if(withChoices) PX.ch.forEach((c,i)=> seq.push({t:["One.","Two.","Three."][i]+" "+c, p:pitch(it.L[it.L.length-1][0]==="W"?"M":"W"), gap:600}));
-  }else{
-    seq.push({t:"Question. "+it.q, p:1, gap:300});
-  }
-  return seq;
+/* ---------- リスニングの声と速さ ----------
+   男女で別の声（アメリカ英語）を使う。名前で男女を見分ける。
+   速さは「1分間の語数（WPM）」で決める。声ごとに実際の読み上げ時間を測って、目標の速さに近づける。 */
+const V_FEMALE = ["Ava","Samantha","Allison","Susan","Zoe","Nicky","Joelle","Noelle","Kathy","Victoria",
+                  "Aria","Jenny","Michelle","Ana","Emma","Ashley","Cora","Elizabeth","Monica","Sara","Zira","Google US English"];
+const V_MALE   = ["Evan","Nathan","Tom","Aaron","Alex","Reed","Guy","Davis","Andrew","Brian","Christopher","Eric",
+                  "Roger","Steffan","Jason","Tony","David","Mark"];
+/* おもしろ声・ロボット風の声は使わない */
+const V_SKIP = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Eddy|Flo|Grandma|Grandpa|Rocko|Sandy|Shelley|Novelty/i;
+const LWS = [[85,"ゆっくり（85語/分）"],[100,"本番に近い（100語/分）"],[115,"少し速め（115語/分）"]];
+let VO = null;   // {W, M, wPitch, mPitch}
+function vName(v){ return v ? v.name.replace(/\s*\(.*?\)\s*/g," ").replace(/Microsoft\s+|\s+Online.*$|\s+-\s+English.*$/g,"").trim() : ""; }
+function vRank(v, list){
+  const n = v.name;
+  let i = list.findIndex(x => n.indexOf(x) >= 0);
+  if(i < 0) return -1;
+  let s = 100 - i;
+  if(/Premium|Enhanced|Natural|Neural/i.test(n)) s += 200;   // 高音質の声を優先
+  if(/^en[-_]US/i.test(v.lang)) s += 50;
+  return s;
 }
-function speakSeq(seq){
+function pickVoices(){
+  if(!synth) return null;
+  let vs = [];
+  try{ vs = synth.getVoices() || []; }catch(e){ return null; }
+  const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang) && !V_SKIP.test(v.name));
+  const us = en.filter(v => /^en[-_]US/i.test(v.lang));
+  const pool = us.length ? us : en;
+  const best = list => pool.map(v=>({v, s:vRank(v,list)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0];
+  const f = best(V_FEMALE), m = best(V_MALE);
+  /* 質問を読むアナウンサー：本番と同じく、対話の女性とは別の女性の声にする */
+  const q = f ? pool.filter(v=>v!==f.v).map(v=>({v, s:vRank(v,V_FEMALE)})).filter(o=>o.s>=0).sort((a,b)=>b.s-a.s)[0] : null;
+  const any = pool[0] || null;
+  const W = f ? f.v : (m ? m.v : any);
+  const M = m ? m.v : (f ? f.v : any);
+  VO = { W, M, Q: q ? q.v : W,
+         wPitch: (!f && m) ? 1.3 : 1,      // 女性の声がないときは、男性の声を高くして代わりにする
+         mPitch: (!m && f) ? 0.75 : 1,     // 男性の声がないときは、女性の声を低くして代わりにする
+         same: !(f && m) };
+  return VO;
+}
+if(synth){
+  try{ synth.addEventListener ? synth.addEventListener("voiceschanged", ()=>{ pickVoices(); voiceInfo(); }) : null; }catch(e){}
+}
+function voiceInfo(){
+  const el = $id("voiceInfo"); if(!el) return;
+  if(!canSpeak()){ el.textContent = "この端末（またはブラウザ）は読み上げに対応していません。"; return; }
+  if(!VO) pickVoices();
+  if(!VO || !VO.W){ el.textContent = "英語の声が見つかりません。"; return; }
+  el.textContent = "男性の声：" + vName(VO.M) + (VO.mPitch!==1?"（女性の声を低くしています）":"") +
+                   "　女性の声：" + vName(VO.W) + (VO.wPitch!==1?"（男性の声を高くしています）":"") +
+                   "　質問を読む声：" + vName(VO.Q) + (VO.Q===VO.W?"（女性の声を少し高くしています）":"") +
+                   (VO.same ? "。この端末には英語の男性・女性の声がそろっていないため、声の高さで区別しています。" : "");
+}
+/* 声ごとの「rate=1 のときの WPM」。測るたびに更新し、記録と一緒に保存する */
+function calOf(v){
+  const c = (S.vcal && v && S.vcal[v.name]) || 0;
+  return c > 60 && c < 400 ? c : 175;   // まだ測っていない声は、ふつうの読み上げの速さ（約175語/分）と仮定する
+}
+function setCal(v, wpmAt1){
+  if(!v || !(wpmAt1 > 60 && wpmAt1 < 400)) return;
+  if(!S.vcal) S.vcal = {};
+  const old = S.vcal[v.name];
+  S.vcal[v.name] = Math.round(old ? old*0.6 + wpmAt1*0.4 : wpmAt1);
+}
+const wordCount = t => (String(t).match(/[A-Za-z0-9][A-Za-z0-9'’.:-]*/g) || []).length;
+let SEQ_ID = 0;
+function speakSeq(seq, onDone){
   if(!synth) return;
   try{ synth.cancel(); }catch(e){}
-  let i = 0;
+  if(!VO || !VO.W) pickVoices();
+  const id = ++SEQ_ID;
+  const target = Number(S.settings.lw) || 100;
+  let i = 0, words = 0, ms = 0, endAt = 0;
   const step = () => {
-    if(i >= seq.length) return;
+    if(id !== SEQ_ID) return;                     // 別の読み上げが始まったら止める
+    if(i >= seq.length){
+      if(onDone) onDone(ms > 0 ? Math.round(words / (ms/60000)) : 0, endAt || Date.now());
+      saveData(S);
+      return;
+    }
     const s = seq[i++];
     try{
       const u = new SpeechSynthesisUtterance(s.t);
       u.lang = "en-US";
-      if(!usVoice) usVoice = chooseVoice();
-      if(usVoice) u.voice = usVoice;
-      u.rate = 0.88; u.pitch = s.p || 1;
-      let done = false;
-      const go = () => { if(done) return; done = true; setTimeout(step, s.gap||400); };
-      u.onend = go; u.onerror = go;
+      const isM = s.who === "M", isQ = s.who === "Q";
+      const v = VO ? (isQ ? VO.Q : isM ? VO.M : VO.W) : null;
+      if(v) u.voice = v;
+      u.pitch = VO ? (isM ? VO.mPitch : (isQ && VO.Q===VO.W ? VO.wPitch*1.08 : VO.wPitch)) : 1;
+      const rate = Math.max(0.45, Math.min(1.3, target / calOf(v)));
+      u.rate = rate;
+      const n = wordCount(s.t);
+      let t0 = 0, done = false;
+      u.onstart = () => { t0 = performance.now(); };
+      const go = ok => {
+        if(done) return; done = true;
+        endAt = Date.now();
+        if(ok && t0){
+          const d = performance.now() - t0;
+          if(d > 700 && n >= 3){
+            setCal(v, (n / (d/60000)) / rate);
+            if(s.count){ words += n; ms += d; }
+          }
+        }
+        setTimeout(step, s.gap || 600);
+      };
+      u.onend = () => go(true); u.onerror = () => go(false);
       synth.speak(u);
-    }catch(e){}
+    }catch(e){ setTimeout(step, 300); }
   };
   step();
+}
+function stopSeq(){ SEQ_ID++; stopSpeech(); }
+/* 第3部の話し手：本文から男女を決め、決まらないときは問題ごとに交互にする */
+function narrator(it){
+  if(it.nv) return it.nv;
+  const n = parseInt(String(it.id).replace(/\D/g,""),10) || 0;
+  return n % 2 ? "W" : "M";
+}
+function liSeq(it, withChoices){
+  const who = l => l[0]==="N" ? narrator(it) : l[0];
+  const seq = it.L.map(l=>({t:l[1], who:who(l), gap:700, count:true}));
+  if(it.part===1){
+    /* 本番と同じく、選択肢は最後の発言をした人と反対の人が読む */
+    const other = it.L[it.L.length-1][0]==="W" ? "M" : "W";
+    if(withChoices) PX.ch.forEach((c,i)=> seq.push({t:["One.","Two.","Three."][i]+" "+c, who:other, gap:900}));
+  }else{
+    /* 質問は、本番と同じく別の女性のアナウンサー（☆☆）が読む */
+    seq.push({t:"Question. "+it.q, who:"Q", gap:600});
+  }
+  return seq;
+}
+function showWpm(w){
+  const el = $id("liWpm");
+  if(el && w > 0) el.textContent = "今の放送の速さ：約" + w + "語/分（目標 " + (Number(S.settings.lw)||100) + "語/分）";
+}
+function testVoices(){
+  warmUpSpeech();
+  pickVoices(); voiceInfo();
+  speakSeq([{t:"Hi, Emma. What are you doing this weekend?", who:"M", gap:600, count:true},
+            {t:"I'm going to visit my grandmother with my family.", who:"W", gap:600, count:true},
+            {t:"Question. What will the girl do this weekend?", who:"Q", gap:600}],
+           w => { const el = $id("voiceTest"); if(el && w>0) el.textContent = "いまの速さ：約"+w+"語/分"; });
 }
 function renderLI(it){
   const mode = listenMode();
@@ -1581,7 +1773,7 @@ function renderLI(it){
               : "英文と質問を聞き、答えとして最も適切なものを選びます。";
   let card = '<div class="qcard" id="pCard"><p class="qtype">'+LPART[it.part]+'　'+guide+'</p>';
   if(mode==="listen"){
-    card += '<p class="playrow"><button type="button" class="say" data-act="li-play" id="liPlay">🔊 放送を聞く（1回目）</button></p>'+
+    card += '<p class="playrow"><button type="button" class="say" data-act="li-play" id="liPlay">🔊 放送を聞く（1回目）</button></p><p class="hint" id="liWpm"></p>'+
       '<p class="hint">'+(it.part===1?"選択肢も放送で読まれます。":"選択肢を先に読んでおくと、聞くポイントがわかります。")+'</p>';
   }else{
     card += dlgHTML(it.L,{jaSpk:true});
@@ -1595,20 +1787,23 @@ function playLI(){
   const it = PX.list[PX.i];
   warmUpSpeech();
   PX.plays++;
-  speakSeq(liSeq(it, true));
+  PX.playing = true;
+  speakSeq(liSeq(it, true), (w, endAt)=>{ PX.playing = false; PX.audioEnd = endAt; showWpm(w); });
   const b = $id("liPlay");
   if(b) b.textContent = PX.plays>=2 ? "🔊 もう一度聞く（"+(PX.plays+1)+"回目）" : "🔊 もう一度聞く（2回目）";
 }
 function answerLI(i){
   const it = PX.list[PX.i], ok = PX.ch[i]===it.k;
-  pFinishQ(ok, it.id, true);
-  stopSpeech();
+  let tms = null;
+  if(PX.mode==="listen" && PX.audioEnd && !PX.playing) tms = Math.min(Date.now()-PX.audioEnd, 60000);
+  pFinishQ(ok, it.id, tms);
+  stopSeq();
   lockChoices(PX.ch, it.k, i);
   const card = $id("pCard");
   card.innerHTML = '<p class="qtype">'+LPART[it.part]+'　放送された英文'+(it.clue?'（<mark class="clue">色の付いた部分</mark>が根拠）':'')+'</p>'+
     dlgHTML(it.L,{jaSpk:true, clue:it.clue})+
     (it.part!==1 ? '<p class="hq"><span class="hqlabel">Question</span><span class="en">'+esc(it.q)+'</span></p>' : '')+
-    (canSpeak() ? '<p class="playrow"><button type="button" class="say small" data-act="li-replay">🔊 もう一度聞く</button></p>' : '')+
+    (canSpeak() ? '<p class="playrow"><button type="button" class="say small" data-act="li-replay">🔊 もう一度聞く</button></p><p class="hint" id="liWpm"></p>' : '')+
     markSvg(ok);
   $id("pAns").innerHTML = '<div class="answer">'+headHTML(ok)+
     '<div class="en">'+esc(it.k)+'</div>'+
@@ -1619,22 +1814,23 @@ function answerLI(i){
 
 /* --- 共通 --- */
 function headHTML(ok){ return ok ? '<span class="head ok">正解</span>' : '<span class="head ng">不正解</span>'; }
-function pFinishQ(ok, id, daily, ms){
+/* tms：計った時間（ミリ秒）。省略すると、問題を出してから答えるまで。null は時間を記録しない */
+function pFinishQ(ok, id, tms){
   PX.stage = "done";
-  const t = ms!==undefined ? ms : Math.min(Date.now()-PX.qStart, 180000);
+  const t = tms===undefined ? Math.min(Date.now()-PX.qStart, 180000) : tms;
   PX.done++;
   if(ok) PX.ok++; else PX.wrong.push(PX.list[PX.i]);
-  pRecord(PX.part, id, ok, t, daily);
+  pRecord(PX.part, id, ok, t);
   pHeader($id("pCount").textContent);
 }
 function pNext(){
-  stopSpeech();
+  stopSeq();
   if(PX.i >= PX.list.length-1){ pResult(); return; }
   PX.i++;
   pRender();
 }
 function pQuit(){
-  stopSpeech();
+  stopSeq();
   if(PX && PX.done>0) pResult(); else show("psetup");
 }
 function pResult(){
@@ -1645,7 +1841,7 @@ function pResult(){
   $id("prTitle").textContent = ({p2:"大問2",p3:"大問3",p4:"大問4",li:"リスニング"})[PX.part]+"の結果";
   $id("prDate").textContent = new Date().toLocaleDateString("ja-JP");
   $id("prRate").textContent = rate;
-  $id("prDetail").innerHTML = total+"問中 "+ok+"問正解"+"<br>所要 "+Math.floor(secs/60)+"分"+(secs%60)+"秒";
+  $id("prDetail").innerHTML = [total+"問中 "+ok+"問正解", pTimeLine(PX.part, PX.tms, PX.ttn, true), "所要 "+Math.floor(secs/60)+"分"+(secs%60)+"秒"].filter(x=>x).join("<br>");
   $id("prMeter").style.width = rate+"%";
   $id("prMsg").textContent =
     rate>=90 ? "よくできました。この調子で続けましょう。" :
@@ -1706,7 +1902,8 @@ document.addEventListener("click", e=>{
   }
   if(a==="p3-check"){ if(PX.stage==="ask" && PX.placed.length===5) answerP3(); return; }
   if(a==="li-play"){ playLI(); return; }
-  if(a==="li-replay"){ warmUpSpeech(); speakSeq(liSeq(PX.list[PX.i], false)); return; }
+  if(a==="li-replay"){ warmUpSpeech(); speakSeq(liSeq(PX.list[PX.i], false), showWpm); return; }
+  if(a==="li-test"){ testVoices(); return; }
   if(a==="pr-retry"){
     let list = shuffle(PX.wrong.slice());
     if(PX.part==="p4") list.sort((x,y)=> x.set.id<y.set.id?-1 : x.set.id>y.set.id?1 : x.qi-y.qi);
@@ -1828,29 +2025,21 @@ function renderHome(){
   const td = S.daily[today()];
   if(td && td[0]>0){
     const rate = Math.round(td[1]/td[0]*100);
+    const pd = (S.pdaily && S.pdaily[today()]) || {};
+    const rows = GPARTS.filter(g=>g[0]!=="all" && pd[g[0]] && pd[g[0]][0]>0).map(g=>{
+      const r = pd[g[0]], pr = Math.round(r[1]/r[0]*100), u = TUNIT[g[0]];
+      const t = fmtT(g[0], r[2], r[3]);
+      return '<tr><td>'+g[2]+'</td><td>'+r[0]+'問</td><td>'+pr+'％</td><td class="tm">'+(t==="－"?"－":(g[0]==="p4"?t:t+"秒"))+'<br><small>'+u.lab+'</small></td></tr>';
+    }).join("");
     tb.innerHTML =
       '<div class="today"><span class="rate">'+rate+'</span><span class="sub">％　'+td[0]+'問中 '+td[1]+'問正解</span></div>'+
       '<div class="meter"><i style="width:'+rate+'%"></i></div>'+
-      '<p class="hint">1問あたりの平均解答時間　'+avgSec(td[2]||0, td[0])+'秒</p>';
+      (rows ? '<table class="ptable"><tr><th>パート</th><th>解いた数</th><th>正答率</th><th>平均時間</th></tr>'+rows+'</table>' : '');
   }else{
     tb.innerHTML = '<p class="empty-note">今日はまだ解いていません。10問だけでも続けましょう。</p>';
   }
-
-  const wk = document.getElementById("week"); wk.innerHTML="";
-  for(let i=6;i>=0;i--){
-    const k = shiftDay(-i);
-    const d = new Date(); d.setDate(d.getDate()-i);
-    const rec = S.daily[k];
-    const rate = rec && rec[0]>0 ? Math.round(rec[1]/rec[0]*100) : null;
-    const sec  = rec && rec[0]>0 ? avgSec(rec[2]||0, rec[0]) : "－";
-    const col = document.createElement("div"); col.className="col";
-    const h = rate===null ? 0 : Math.max(6, Math.round(rate*0.42));
-    col.innerHTML = '<div class="bar'+(rate===null?' empty':'')+'" style="height:'+h+'px" title="'+(rate===null?'記録なし':rate+'%')+'"></div>'+
-                    '<div class="lbl">'+(rate===null?"－":rate)+'</div>'+
-                    '<div class="lbl2">'+sec+'</div>'+
-                    '<div class="lbl3">'+WD[d.getDay()]+'</div>';
-    wk.appendChild(col);
-  }
+  segment(document.getElementById("gTabs"), GPARTS.map(g=>[g[0],g[1]]), "gtab");
+  renderWeek();
 
   const list = weakWords().slice(0,8);
   const card = document.getElementById("weakCard");
@@ -1869,6 +2058,20 @@ function renderHome(){
   updateScopeHint();
   renderParts();
   refreshBackup();
+  renderBkRemind();
+}
+function renderBkRemind(){
+  const el = document.getElementById("bkRemind"); if(!el) return;
+  const days = Object.keys(S.daily||{}).filter(d=>S.daily[d][0]>0).length;
+  let msg = "";
+  if(storeOK && days>0){
+    if(!S.lastBackup) msg = "まだ記録のバックアップをしていません。いちばん下の「記録の引き継ぎ」でコードをコピーしておくと、記録が消えたときに戻せます。";
+    else{
+      const n = Math.round((new Date(today()) - new Date(S.lastBackup)) / 86400000);
+      if(n >= 7) msg = "最後のバックアップから"+n+"日たっています。いちばん下の「記録の引き継ぎ」でコードをコピーしておきましょう。";
+    }
+  }
+  el.textContent = msg; el.hidden = !msg;
 }
 
 /* ========== 記録の引き継ぎ（バックアップ） ==========
@@ -1912,7 +2115,10 @@ document.getElementById("bkCopy").onclick = async ()=>{
   const ta = document.getElementById("bkOut");
   refreshBackup();
   const ok = await copyText(ta.value, ta);
-  if(ok) setMsg("bkCopyMsg", "コピーしました。メモなどに貼りつけて保存してください。", "ok");
+  if(ok){
+    setMsg("bkCopyMsg", "コピーしました。メモなどに貼りつけて保存してください。", "ok");
+    S.lastBackup = today(); saveData(S); renderBkRemind();
+  }
   else { ta.focus(); ta.select(); setMsg("bkCopyMsg", "自動でコピーできませんでした。コードを長押しして「すべてを選択」→「コピー」をしてください。", "ng"); }
 };
 let restoreArmed = null;
@@ -1940,11 +2146,37 @@ document.getElementById("bkRestore").onclick = async ()=>{
   if(!S.weak || typeof S.weak !== "object") S.weak = {};
   if(!S.parts || typeof S.parts !== "object") S.parts = {};
   if(!S.pweak || typeof S.pweak !== "object") S.pweak = {};
+  if(!S.pdaily || typeof S.pdaily !== "object") S.pdaily = {};
   await saveData(S);
   document.getElementById("bkIn").value = "";
   buildSegments(); renderHome();
   setMsg("bkRestoreMsg", storeOK ? "記録を戻しました。" : "記録を戻しましたが、この画面では保存されません。", storeOK ? "ok" : "ng");
 };
+
+/* ========== 1週間のグラフ（全体・パート別） ========== */
+const GPARTS = [["all","全体","全体"],["p1","大問1","大問1"],["p2","大問2","大問2"],["p3","大問3","大問3"],["p4","大問4","大問4"],["li","リスニング","リスニング"]];
+function renderWeek(){
+  const g = GPARTS.some(x=>x[0]===S.settings.gtab) ? S.settings.gtab : "all";
+  const wk = document.getElementById("week"); wk.innerHTML="";
+  for(let i=6;i>=0;i--){
+    const k = shiftDay(-i);
+    const d = new Date(); d.setDate(d.getDate()-i);
+    let n=0, c=0, tm="－";
+    if(g==="all"){ const r = S.daily[k]; if(r){ n=r[0]; c=r[1]; } }
+    else{ const r = S.pdaily && S.pdaily[k] && S.pdaily[k][g]; if(r){ n=r[0]; c=r[1]; tm = fmtT(g, r[2], r[3]); } }
+    const rate = n>0 ? Math.round(c/n*100) : null;
+    const col = document.createElement("div"); col.className="col";
+    const h = rate===null ? 0 : Math.max(6, Math.round(rate*0.42));
+    col.innerHTML = '<div class="bar'+(rate===null?' empty':'')+'" style="height:'+h+'px" title="'+(rate===null?'記録なし':rate+'%')+'"></div>'+
+                    '<div class="lbl">'+(rate===null?"－":rate)+'</div>'+
+                    (g==="all" ? '' : '<div class="lbl2">'+tm+'</div>')+
+                    '<div class="lbl3">'+WD[d.getDay()]+'</div>';
+    wk.appendChild(col);
+  }
+  document.getElementById("weekHint").textContent = g==="all"
+    ? "上段＝正答率（％）。時間はパートごとに測り方がちがうので、パートを選ぶと表示されます。"
+    : "上段＝正答率（％）　"+TUNIT[g].hint+"。";
+}
 
 /* ========== 出題づくり ========== */
 function pool(){
@@ -2135,6 +2367,8 @@ async function finish(){
   const k = today();
   const rec = S.daily[k] || [0,0,0];
   S.daily[k] = [rec[0]+total, rec[1]+correct, (rec[2]||0)+answeredMs];
+  const b1 = pBucket("p1"); b1[0] += total; b1[1] += correct; b1[2] += answeredMs; b1[3] += total;
+  pruneDays();
   Object.keys(S.daily).forEach(d=>{ if(d < shiftDay(-60)) delete S.daily[d]; });
   await saveData(S);
 
