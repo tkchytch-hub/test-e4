@@ -1372,7 +1372,7 @@ function pSetup(part){
         '<label class="hint" style="display:block;margin-top:6px">質問を読む声：<select id="qvSel" class="qvsel"></select></label>'+
         '<p class="playrow"><button type="button" class="say" data-act="li-test">🔊 声と速さを確かめる</button> <span class="hint" id="voiceTest"></span></p>'+
         '<details class="jad"><summary>声をもっと自然にするには（iPhone・iPad）</summary>'+
-        '<p>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」→「英語」を開き、英語（アメリカ）の女性の声（Ava など）と男性の声（Aaron・Evan・Nathan・Tom など）をダウンロードします。名前に「拡張」または「プレミアム」と付いたものは、さらに自然です。Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
+        '<p>「設定」→「アクセシビリティ」→「リーダーと読み上げ」→「声」→「英語」を開き、英語（アメリカ）の女性の声 Zoe（プレミアム）と、男性の声 Tom または Evan をダウンロードします。「拡張」や「プレミアム」と付いたものは、さらに自然です。（iOS 18 までは「リーダーと読み上げ」の代わりに「読み上げコンテンツ」という名前です。）Wi-Fiにつないでいるときに行い、終わったらブラウザを一度閉じて開き直してください。アプリは、ダウンロードした高音質の声を自動で使います。</p></details>';
       body.appendChild(vt);
       pickVoices(); voiceInfo();
       $id("qvSel").onchange = e => { S.settings.qv = e.target.value; saveData(S); pickVoices(); voiceInfo(); testQ(); };
@@ -1627,9 +1627,11 @@ function answerP4(i){
    男女で別の声（アメリカ英語）を使う。名前で男女を見分ける。
    速さは「1分間の語数（WPM）」で決める。声ごとに実際の読み上げ時間を測って、目標の速さに近づける。 */
 /* 自然に聞こえる声だけを候補にする（古い機械的な声・子どもの声は入れない） */
-const V_FEMALE = ["Ava","Samantha","Allison","Susan","Zoe","Nicky","Joelle","Noelle",
+/* いちばん先に使う声：女性は Zoe（プレミアムがあればそれ）、男性は Tom・Evan */
+const V_PREF = ["Zoe","Tom","Evan"];
+const V_FEMALE = ["Zoe","Ava","Samantha","Allison","Susan","Nicky","Joelle","Noelle",
                   "Aria","Jenny","Michelle","Emma","Ashley","Cora","Elizabeth","Monica","Sara","Zira","Google US English"];
-const V_MALE   = ["Evan","Nathan","Tom","Aaron","Alex","Guy","Davis","Andrew","Brian","Christopher","Eric",
+const V_MALE   = ["Tom","Evan","Nathan","Aaron","Alex","Guy","Davis","Andrew","Brian","Christopher","Eric",
                   "Roger","Steffan","Jason","Tony","David","Mark"];
 /* 自然な男性の声がない端末で、女性の声を低くするより先に使う男性の声（少し機械的） */
 const V_MALE_BACKUP = ["Reed","Eddy","Rocko","Fred","Grandpa"];
@@ -1643,6 +1645,7 @@ function vRank(v, list){
   let i = list.findIndex(x => n.indexOf(x) >= 0);
   if(i < 0) return -1;
   let s = 100 - i;
+  if(V_PREF.indexOf(list[i]) >= 0) s += 1000;                 // Zoe・Tom・Evan をいちばん先に
   if(/Premium|Enhanced|Natural|Neural/i.test(n)) s += 200;   // 高音質の声を優先
   if(/^en[-_]US/i.test(v.lang)) s += 50;
   return s;
@@ -1708,7 +1711,7 @@ function voiceInfo(){
   if(!VO) pickVoices();
   if(!VO || !VO.W){ el.textContent = "英語の声が見つかりません。"; return; }
   el.textContent = "男性の声：" + vName(VO.M) + (VO.mPitch!==1?"（男性の声がないため、女性の声を低くしています）":"") +
-                   (VO.backupM?"（自然な男性の声がないため、代わりの声を使っています。下の手順で Aaron・Evan などを入れると自然になります）":"") +
+                   (VO.backupM?"（自然な男性の声がないため、代わりの声を使っています。下の手順で Tom・Evan などを入れると自然になります）":"") +
                    "　女性の声：" + vName(VO.W) + (VO.wPitch!==1?"（男性の声を高くしています）":"") +
                    "　質問を読む声：" + vName(VO.Q) + (VO.Q===VO.W?"（対話の女性と同じ声）":"") +
                    (VO.same ? "。この端末には英語の男性・女性の声がそろっていないため、声の高さで区別しています。" : "");
