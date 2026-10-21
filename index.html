@@ -355,6 +355,11 @@ mark.clue{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
     <p class="hint">問題はすべて書き下ろしです。</p>
   </div>
 
+  <div class="card">
+    <h2>読み上げ</h2>
+    <div class="field" style="margin-bottom:4px"><span>解答のあとに英文を読み上げる</span><div class="seg" id="segRead"></div><p class="hint" id="readHint"></p></div>
+  </div>
+
   <div class="card" id="weakCard">
     <h2>間違えやすい語</h2>
     <ul class="weak-list" id="weakList"></ul>
@@ -1025,7 +1030,7 @@ const defaults = () => ({
   streak:0, best:0, lastLogin:null,
   daily:{},   // "YYYY-MM-DD": [解答数, 正解数, 解答にかかった合計ミリ秒]
   weak:{},    // 語: まちがえた回数
-  settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on",
+  settings:{ mode:"mix", scope:"all", count:10, time:0, ja:"after", size:1, speak:"on", readAfter:"on",
              gtab:"all", pn:10, p3m:"tap", r4k:"all", r4n:1, lp:"all", lm:"listen", lw:100, qv:"", mv:"" },
   parts:{},   // パート: [解答数, 正解数]（大問2〜4・リスニング）
   pweak:{},   // "パート:問題id": まちがえた回数
@@ -1290,8 +1295,8 @@ function stopAudio(){ AUD_SEQ++; if(AUD){ try{ AUD.pause(); AUD.onended = null; 
 /* 第1部は「対話」「番号（One/Two/Three）」「選択肢」に分けた音声を、画面の選択肢の順番でつないで流す。
    間の長さは本番の放送に合わせる：対話→One 1.1秒／番号→選択肢 0.77秒／選択肢→次の番号 1.15秒 */
 let AUD_SEQ = 0;
-function audioPlan(it){
-  if(it.part !== 1) return [["audio/"+it.id+".mp3", 0]];
+function audioPlan(it, bodyOnly){
+  if(it.part !== 1 || bodyOnly) return [["audio/"+it.id+".mp3", 0]];
   const ord = LAUDIO[it.id].ord || [];
   const list = [["audio/"+it.id+".mp3", 1.1]];
   PX.ch.forEach((c,i) => {
@@ -1301,12 +1306,12 @@ function audioPlan(it){
   });
   return list;
 }
-function playAudio(it, onDone, onFail){
+function playAudio(it, onDone, onFail, bodyOnly){
   const a = audioEl(); if(!a) return false;
   stopAudio();
   const id = ++AUD_SEQ;
   const rate = ({85:0.9, 100:1, 115:1.1})[Number(S.settings.lw)||100] || 1;
-  const list = audioPlan(it);
+  const list = audioPlan(it, bodyOnly);
   list.forEach(x => { try{ fetch(x[0]).catch(()=>{}); }catch(e){} });   // 先に読みこんでおき、つなぎ目で待たないようにする
   let k = 0, failed = false;
   const fail = () => { if(failed || id !== AUD_SEQ) return; failed = true; onFail && onFail(); };
@@ -1569,7 +1574,10 @@ function answerP2(i){
   $id("pAns").innerHTML = '<div class="answer">'+headHTML(ok)+
     '<div class="ex">'+dlgHTML(it.L,{blank:true, fill:it.k}).replace('class="dlg"','class="dlg small"')+'</div>'+
     '<div class="ja">'+it.L.map((l,n)=>esc(l[0])+'：'+esc(it.ja[n])).join("<br>")+'</div>'+
-    '<p class="cap">解説</p><div>'+esc(it.e)+'</div></div>';
+    '<p class="cap">解説</p><div>'+esc(it.e)+'</div>'+readBtn("readBtnP")+'</div>';
+  const seq2 = () => talkSeq(it.L.map(l => [l[0], l[1].replace("___", it.k)]));
+  $id("readBtnP") && ($id("readBtnP").onclick = () => readSeq(seq2()));
+  if(readAfterOn()) readSeq(seq2());
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
 
@@ -1643,7 +1651,10 @@ function answerP3(pick){
     '<div class="ja">'+esc(it.ja)+'</div>'+
     '<p class="cap">正しい順番</p><div>'+it.w.map((w,n)=>num(n)+' '+esc(w)).join("　→　")+'</div>'+
     '<div class="ja">2番目は '+num(1)+' '+esc(it.w[1])+'、4番目は '+num(3)+' '+esc(it.w[3])+' なので、答えは「'+num(1)+' ― '+num(3)+'」です。</div>'+
-    '<p class="cap">ポイント</p><div>'+esc(it.pt)+'</div></div>';
+    '<p class="cap">ポイント</p><div>'+esc(it.pt)+'</div>'+readBtn("readBtnP")+'</div>';
+  const seq3 = () => [{t:p3Full(it), who:"W", gap:300}];
+  $id("readBtnP") && ($id("readBtnP").onclick = () => readSeq(seq3()));
+  if(readAfterOn()) readSeq(seq3());
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
 
@@ -1680,7 +1691,16 @@ function answerP4(i){
     '<div class="en">'+esc(it.q.k)+'</div>'+
     '<div class="ja">質問：'+esc(it.q.qja)+'</div>'+
     '<p class="cap">解説</p><div>'+esc(it.q.e)+'</div>'+
-    '<details class="jad"><summary>本文の和訳を見る</summary>'+it.set.body.filter(b=>b[2]).map(b=>'<p>'+esc(b[2])+'</p>').join("")+'</details></div>';
+    '<details class="jad"><summary>本文の和訳を見る</summary>'+it.set.body.filter(b=>b[2]).map(b=>'<p>'+esc(b[2])+'</p>').join("")+'</details>'+readBtn("readBtnP")+'</div>';
+  const seq4 = () => {
+    const line = (it.set.body.find(b => b[1].indexOf(it.q.clue) >= 0) || ["",""])[1];
+    const prot = line.replace(/\b([ap])\.m\./g, "$1§m§").replace(/\b(Mr|Ms|Mrs|Dr|No)\./g, "$1§");   // a.m.／p.m.／Mr. などで文を切らない
+    const sents = (prot.match(/[^.!?]+[.!?]+["”]?/g) || [prot]).map(x => x.replace(/§m§/g, ".m.").replace(/§/g, "."));
+    const hit = sents.find(x => x.indexOf(it.q.clue) >= 0) || sents.find(x => it.q.clue.indexOf(x.trim()) >= 0) || line;
+    return hit.trim() ? [{t:hit.trim(), who:"W", gap:300}] : [];
+  };
+  $id("readBtnP") && ($id("readBtnP").onclick = () => readSeq(seq4()));
+  if(readAfterOn()) readSeq(seq4());
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
 
@@ -1928,8 +1948,32 @@ function answerLI(i){
     '<div class="en">'+esc(it.k)+'</div>'+
     '<p class="cap">解説</p><div>'+esc(it.e)+'</div>'+
     '<details class="jad"><summary>和訳を見る</summary>'+it.L.map((l,n)=>'<p>'+(l[0]==="N"?'':(SPKJ[l[0]]||l[0])+'：')+esc(it.ja[n])+'</p>').join("")+(it.qja?'<p>質問：'+esc(it.qja)+'</p>':'')+'</details></div>';
+  /* 読み上げる設定のときは、放送された英文を自動で流す（第1部は対話だけ、第2部・第3部は本文と質問） */
+  if(readAfterOn()){
+    if(hasAudio(it)) playAudio(it, null, () => { if(canSpeak()){ warmUpSpeech(); speakSeq(liSeq(it, false)); } }, true);
+    else if(canSpeak()){ warmUpSpeech(); speakSeq(liSeq(it, false)); }
+  }
   pDock('<button class="btn" type="button" data-act="p-next">'+nextLabel()+'</button>');
 }
+
+/* --- 解答のあとの読み上げ --- */
+const readAfterOn = () => S.settings.readAfter !== "off";
+const MALE_SPK = /^(M|Boy|Man|Father|Dad|Son|Student)$/;
+/* 会話の行を、話し手の男女に合わせた読み上げの列にする */
+function talkSeq(lines){
+  return lines.filter(l => l[1]).map(l => ({t:l[1], who: l[0]==="N" ? "W" : (MALE_SPK.test(l[0]) ? "M" : "W"), gap:500}));
+}
+/* 大問1の文：「A: ～ B: ～」「～ - ～」は話し手ごとに分け、A は女性、B は男性の声にする */
+function sentSeq(text){
+  const t = String(text).replace(/<[^>]+>/g,"");
+  const parts = t.split(/\s+(?=[AB]\s*:)|\s+-\s+/);
+  return parts.map((x,i) => {
+    const m = x.match(/^([AB])\s*:\s*(.*)$/);
+    return {t: m ? m[2] : x, who: m ? (m[1]==="A" ? "W" : "M") : (i%2 ? "M" : "W"), gap:500};
+  }).filter(x => x.t.trim());
+}
+function readSeq(seq){ if(!canSpeak() || !seq.length) return; warmUpSpeech(); speakSeq(seq); }
+function readBtn(id){ return canSpeak() ? '<p class="playrow" style="margin:8px 0 0"><button type="button" class="say small" id="'+id+'">🔊 英文を聞く</button></p>' : ''; }
 
 /* --- 共通 --- */
 function headHTML(ok){ return ok ? '<span class="head ok">正解</span>' : '<span class="head ng">不正解</span>'; }
@@ -2089,6 +2133,7 @@ function segment(el, items, key){
       if(key==="ja") updateJaHint();
       if(key==="speak"){ updateSpeakHint(); if(val==="on"){ warmUpSpeech(); speak("English"); } else stopSpeech(); }
       if(key==="size") applySize();
+      if(key==="readAfter"){ updateReadHint(); if(val==="off") stopSeq(); }
       pOnSetting(key);
     };
     el.appendChild(b);
@@ -2102,10 +2147,19 @@ function buildSegments(){
   segment(document.getElementById("segJa"), JAOPT, "ja");
   segment(document.getElementById("segSpeak"), SPEAKS, "speak");
   segment(document.getElementById("segSize"), SIZES, "size");
+  segment(document.getElementById("segRead"), [["on","読み上げる"],["off","読み上げない"]], "readAfter");
+  updateReadHint();
   updateScopeHint();
   updateJaHint();
   updateSpeakHint();
   applySize();
+}
+function updateReadHint(){
+  const h = document.getElementById("readHint"); if(!h) return;
+  if(!canSpeak() && !Object.keys(LAUDIO||{}).length){ h.textContent = "この端末（またはブラウザ）は読み上げに対応していません。"; return; }
+  h.textContent = S.settings.readAfter === "off"
+    ? "自動では読み上げません。解答のあとの「🔊 英文を聞く」ボタンで、いつでも聞けます。"
+    : "答えたあとに、正しい英文を自動で読み上げます（大問1〜3は完成した文、大問4は答えの根拠の文、リスニングは放送された英文）。";
 }
 function updateSpeakHint(){
   const h = document.getElementById("speakHint");
@@ -2456,9 +2510,13 @@ function answer(picked){
     });
     box += '</ul>';
   }
-  document.getElementById("answerBox").innerHTML = box + '</div>';
+  document.getElementById("answerBox").innerHTML = box + readBtn("readBtn1") + '</div>';
   const sb2 = document.getElementById("sayBtn2");
   if(sb2) sb2.onclick = ()=>{ warmUpSpeech(); speak(q.item.w); };
+  const full1 = () => { const t = q.item.s.replace("___", blankForm(q.item)).replace(/^([a-z])/, c=>c.toUpperCase()).replace(/(:\s*)([a-z])/g,(m,a,c)=>a+c.toUpperCase()); return sentSeq(t); };
+  const rb1 = document.getElementById("readBtn1");
+  if(rb1) rb1.onclick = () => readSeq(full1());
+  if(readAfterOn()) readSeq(full1());
 
   const wk = keyOf(q.item);
   if(q.correct){
@@ -2474,6 +2532,7 @@ function answer(picked){
   document.getElementById("qScore").textContent = "正解 "+quiz.correct;
 }
 function nextQuestion(){
+  stopSeq();
   if(quiz.i === quiz.qs.length-1){ finish(); return; }
   quiz.i++;
   renderQuestion();
